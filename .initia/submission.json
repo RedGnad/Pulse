@@ -1,0 +1,12 @@
+{
+  "project_name": "Initia Pulse",
+  "repo_url": "https://github.com/RedGnad/Pulse",
+  "commit_sha": "18c638cb9cb2451be2e4d2fe68744528800c73b5",
+  "rollup_chain_id": "initia-pulse-1",
+  "deployed_address": "0xB7C25af401137597C896685Fc195e0143c54de7A",
+  "vm": "evm",
+  "native_feature": "interwoven-bridge",
+  "core_logic_path": "contracts/PulseOracle.sol",
+  "native_feature_frontend_path": "src/components/bridge/bridge-widget.tsx",
+  "demo_video_url": ""
+}

@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
   reactCompiler: true,
+  // ethers v6 is ESM-only — don't bundle it, use node_modules directly
+  serverExternalPackages: ["ethers"],
 };
 
 export default nextConfig;

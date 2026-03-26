@@ -1,0 +1,476 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { EcosystemOverview, MinitiaWithMetrics, L1Validator, OpinitBridge, IbcChannel, DeployAdvice, StakeAdvice, BridgeAdvice } from "./types";
+import { formatNumber } from "./format";
+
+export const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY,
+});
+
+export interface EcosystemInsights {
+  daily_brief: string;
+  ecosystem_health: "thriving" | "growing" | "stable" | "stagnant";
+  top_chain: { name: string; metric: string; reason: string };
+  anomalies: { chain: string; finding: string; severity: "low" | "medium" | "high" }[];
+  bridge_summary: string;
+  key_insights: { title: string; body: string; icon: string }[];
+  generated_at: string;
+}
+
+// ─── Mock mode ────────────────────────────────────────────────────────────────
+// Set AI_MOCK=true in .env.local to skip all Claude API calls during dev.
+// Production builds or AI_MOCK=false will call the real API.
+const IS_MOCK = process.env.AI_MOCK === "true";
+
+const MOCK_INSIGHTS: EcosystemInsights = {
+  daily_brief:
+    "The Initia ecosystem is running normally across its interconnected rollup network. Multiple minitias are processing transactions and producing blocks at consistent rates. Cross-rollup IBC channels remain active.",
+  ecosystem_health: "growing",
+  top_chain: {
+    name: "Initia L1",
+    metric: "Interwoven-1 mainnet",
+    reason: "The L1 anchor chain maintains consistent block production and validator participation.",
+  },
+  anomalies: [],
+  bridge_summary:
+    "Interwoven Bridge channels are operational. Token transfer channels between L1 and minitias are active.",
+  key_insights: [
+    {
+      title: "Network Active",
+      body: "Multiple minitias are live and producing blocks. Cross-rollup IBC channels remain open.",
+      icon: "⚡",
+    },
+    {
+      title: "Bridge Infrastructure",
+      body: "OPinit bridges provide the settlement layer connecting minitias to Initia L1.",
+      icon: "🔗",
+    },
+    {
+      title: "AI Mock Mode",
+      body: "Set AI_MOCK=false in .env.local to enable live Claude-powered analysis.",
+      icon: "🤖",
+    },
+  ],
+  generated_at: new Date().toISOString(),
+};
+
+const MOCK_CHAT_REPLY =
+  "AI analysis is in mock mode. Set AI_MOCK=false in .env.local to enable live responses.";
+
+function buildEcosystemContext(data: EcosystemOverview): string {
+  // Exclude mainnet reference chains from AI analysis — they're visual-only
+  const testnetChains = data.minitias.filter((m) => !m.isMainnetRef);
+  const liveChains = testnetChains.filter(
+    (m) => m.metrics?.blockHeight && m.metrics.blockHeight > 0
+  );
+  const totalTxs = testnetChains.reduce((s, m) => s + (m.metrics?.totalTxCount || 0), 0);
+  const transferChannels = data.ibcChannels.filter((c) => c.portId === "transfer");
+
+  const chainDetails = liveChains
+    .sort((a, b) => (b.metrics?.blockHeight || 0) - (a.metrics?.blockHeight || 0))
+    .map((m) => {
+      const parts = [`${m.prettyName} (${m.chainId})`];
+      if (m.metrics?.blockHeight) parts.push(`blocks: ${formatNumber(m.metrics.blockHeight)}`);
+      if (m.metrics?.totalTxCount) parts.push(`txs: ${formatNumber(m.metrics.totalTxCount)}`);
+      if (m.metrics?.activeValidators) parts.push(`validators: ${m.metrics.activeValidators}`);
+      if (m.metrics?.latestBlockTime) {
+        const age = Math.floor((Date.now() - new Date(m.metrics.latestBlockTime).getTime()) / 1000);
+        parts.push(`last block: ${age}s ago`);
+      }
+      return `- ${parts.join(", ")}`;
+    })
+    .join("\n");
+
+  const unreachable = testnetChains
+    .filter((m) => !m.metrics?.blockHeight || m.metrics.blockHeight === 0)
+    .map((m) => m.prettyName)
+    .join(", ");
+
+  return `
+INITIA ECOSYSTEM SNAPSHOT — ${new Date(data.lastUpdated).toUTCString()}
+
+OVERVIEW:
+- Total minitias registered: ${testnetChains.length}
+- Live / reachable: ${liveChains.length}
+- Unreachable: ${unreachable || "none"}
+- IBC channels: ${data.totalIbcChannels} total (${transferChannels.length} token transfer)
+- Total transactions across ecosystem: ${totalTxs > 0 ? formatNumber(totalTxs) : "data unavailable"}
+
+LIVE CHAINS (sorted by block height):
+${chainDetails || "No live chain data available"}
+
+INTERWOVEN BRIDGE:
+- ${transferChannels.length} active token transfer channels between L1 and minitias
+- ${data.ibcChannels.filter((c) => c.portId === "nft-transfer").length} NFT transfer channels
+
+MAINNET REFERENCE (read-only — these chains are on mainnet, not testnet):
+${data.minitias.filter((m) => m.isMainnetRef).map((m) => `- ${m.prettyName} (${m.chainId}) — mainnet, no live metrics available from testnet`).join("\n") || "none"}
+Note: Mainnet chains are listed for reference only. We can discuss deployment strategies for mainnet but cannot show live testnet metrics for them.
+`.trim();
+}
+
+const SYSTEM_PROMPT = `You are the AI analyst for Initia Pulse, a real-time intelligence platform for the Initia blockchain ecosystem.
+Initia is a Layer 1 blockchain with interconnected rollups called "minitias" linked via the Interwoven Bridge (native IBC).
+Your role is to analyze real-time chain data and generate sharp, data-driven insights for crypto developers and DeFi power users.
+
+Tone: precise, technical, concise. Like a Bloomberg analyst, not a chatbot.
+Never be vague. Reference specific chain names, numbers, and patterns.
+If data is limited, say so clearly and work with what's available.
+
+IMPORTANT: The live metrics you see are from the Initia TESTNET (initiation-2). Mainnet chains (Blackwing, Civitia, Echelon, etc.) are listed for reference — you can discuss them, their use cases, and deployment strategies, but be transparent that live metrics are testnet-only. When users ask about mainnet deployment, provide useful context about what's available there.`;
+
+export async function generateInsights(data: EcosystemOverview, forceReal = false): Promise<EcosystemInsights> {
+  if (IS_MOCK && !forceReal) return { ...MOCK_INSIGHTS, generated_at: new Date().toISOString() };
+
+  const context = buildEcosystemContext(data);
+
+  const message = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 900,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: `Analyze this ecosystem snapshot and return a JSON object with this exact structure:
+{
+  "daily_brief": "2-3 sentence narrative summary of the current ecosystem state",
+  "ecosystem_health": "thriving|growing|stable|stagnant",
+  "top_chain": { "name": "chain name", "metric": "e.g. 30.2M blocks", "reason": "one sentence" },
+  "anomalies": [{ "chain": "name", "finding": "specific observation", "severity": "low|medium|high" }],
+  "bridge_summary": "one sentence about Interwoven Bridge activity",
+  "key_insights": [
+    { "title": "short title", "body": "1-2 sentences", "icon": "emoji" }
+  ]
+}
+
+Return ONLY valid JSON, no markdown, no explanation.
+
+DATA:
+${context}`,
+      },
+    ],
+  });
+
+  const rawText = message.content[0].type === "text" ? message.content[0].text : "{}";
+  // Strip markdown code fences if Claude wraps the JSON
+  const raw = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
+  try {
+    const parsed = JSON.parse(raw);
+    return { ...parsed, generated_at: new Date().toISOString() };
+  } catch {
+    // Fallback if Claude returns something unexpected
+    return {
+      daily_brief: "Ecosystem data collected. Analysis temporarily unavailable.",
+      ecosystem_health: "stable",
+      top_chain: { name: "—", metric: "—", reason: "Insufficient data" },
+      anomalies: [],
+      bridge_summary: "Bridge channel data available. Volume metrics pending.",
+      key_insights: [],
+      generated_at: new Date().toISOString(),
+    };
+  }
+}
+
+// ─── PulseAdvisor ─────────────────────────────────────────────────────────────
+
+const ADVISOR_SYSTEM = `You are PulseAdvisor, an Initia ecosystem intelligence layer embedded in Initia Pulse.
+You have real-time data about every minitia, validator, and bridge on the Interwoven Network.
+Your job: give sharp, data-driven recommendations. Cite specific numbers. Be opinionated.
+Tone: like a senior Initia developer advising a colleague, not a generic assistant.
+Return ONLY valid JSON matching the exact schema requested. No markdown, no explanation outside the JSON.`;
+
+// ── Oracle context helper ─────────────────────────────────────────────────────
+function buildOracleContext(
+  history?: { ecosystemHealth: string; brief: string; blockHeight: number; activeMinitilas: number }[]
+): string {
+  if (!history?.length) return "";
+  return `\nPULSEORACLE SNAPSHOTS (on-chain, initia-pulse-1 — last ${Math.min(history.length, 3)}):\n${
+    history.slice(0, 3).map(s =>
+      `  [${s.ecosystemHealth.toUpperCase()}] L1 Block: ${s.blockHeight.toLocaleString()}, Live minitias: ${s.activeMinitilas} — "${s.brief.slice(0, 120)}"`
+    ).join("\n")
+  }\n`;
+}
+
+// ── Deploy Advisor ────────────────────────────────────────────────────────────
+export async function generateDeployAdvice(
+  minitias: MinitiaWithMetrics[],
+  bridges: OpinitBridge[],
+  ibcChannels: IbcChannel[],
+  requirements: { appType: string; needs: string[] },
+  oracleHistory?: { ecosystemHealth: string; brief: string; blockHeight: number; activeMinitilas: number }[]
+): Promise<DeployAdvice> {
+  const live = minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0);
+
+  const chainSummaries = live.map(m => {
+    const bridge = bridges.find(b => b.bridge_id === m.bridgeId);
+    const channels = ibcChannels.filter(c => c.sourceChainId === m.chainId && c.portId === "transfer");
+    const parts: string[] = [
+      `${m.prettyName} (${m.chainId})`,
+      m.metrics?.avgBlockTime ? `block_time: ${m.metrics.avgBlockTime.toFixed(2)}s` : "",
+      m.metrics?.totalTxCount ? `total_txs: ${formatNumber(m.metrics.totalTxCount)}` : "",
+      m.metrics?.activeValidators ? `validators: ${m.metrics.activeValidators}` : "",
+      `ibc_channels: ${channels.length}`,
+      bridge ? `fraud_window: ${bridge.config.finalization_period}` : "no_bridge_data",
+      bridge ? `oracle_enabled: ${bridge.config.oracle_enabled}` : "",
+      bridge ? `da: ${bridge.batch_info?.chain_type ?? "INITIA"}` : "",
+      m.isOurs ? "our_rollup: true" : "",
+    ].filter(Boolean);
+    return `- ${parts.join(", ")}`;
+  }).join("\n");
+
+  // Pre-compute needs matrix — helps Claude match requirements to chains
+  const needsMatrix = requirements.needs.length > 0 ? [
+    "",
+    "NEEDS MATRIX (pre-computed from live data):",
+    ...requirements.needs.map(need => {
+      let matches: string[] = [];
+      if (need === "oracle")   matches = live.filter(m => bridges.find(b => b.bridge_id === m.bridgeId)?.config.oracle_enabled).map(m => m.prettyName);
+      if (need === "ibc")      matches = live.filter(m => ibcChannels.some(c => c.sourceChainId === m.chainId && c.portId === "transfer")).map(m => m.prettyName);
+      if (need === "celestia") matches = live.filter(m => bridges.find(b => b.bridge_id === m.bridgeId)?.batch_info?.chain_type === "CELESTIA").map(m => m.prettyName);
+      if (need === "fast")     matches = live.filter(m => (m.metrics?.avgBlockTime ?? 99) < 2).map(m => m.prettyName);
+      if (need === "evm")      matches = live.filter(m => m.chainId.includes("move") || m.chainId.includes("evm") || m.chainId.includes("black")).map(m => m.prettyName);
+      return `  ${need}: ${matches.length > 0 ? matches.join(", ") : "none detected — use best available"}`;
+    }),
+  ].join("\n") : "";
+
+  const oracleCtx = buildOracleContext(oracleHistory);
+
+  const prompt = `A developer wants to deploy on Initia. Profile:
+App type: ${requirements.appType}
+Requirements: ${requirements.needs.join(", ") || "none specified"}
+
+Available live minitias (real-time data):
+${chainSummaries}
+${needsMatrix}
+${oracleCtx}
+Return JSON:
+{
+  "top_chain": { "chainId": "...", "prettyName": "...", "score": 0-100, "reason": "1 sentence with specific numbers" },
+  "alternatives": [{ "chainId": "...", "prettyName": "...", "score": 0-100, "reason": "1 sentence" }],
+  "rationale": "2-3 sentences explaining the recommendation with data",
+  "warnings": ["specific concern if any"]
+}
+Include 2 alternatives. If no live chains match well, say so in warnings.`;
+
+  if (IS_MOCK) {
+    const top = live[0];
+    return {
+      top_chain: { chainId: top?.chainId ?? "—", prettyName: top?.prettyName ?? "—", score: 78, reason: "Mock mode — set AI_MOCK=false for live analysis." },
+      alternatives: live.slice(1, 3).map(m => ({ chainId: m.chainId, prettyName: m.prettyName, score: 60, reason: "Mock." })),
+      rationale: "Mock mode active. Real analysis cross-references block time, IBC connectivity, oracle availability, and tx volume.",
+      warnings: ["AI_MOCK=true"],
+    };
+  }
+
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 600,
+    system: ADVISOR_SYSTEM,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
+    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  try { return JSON.parse(raw) as DeployAdvice; } catch {
+    return { top_chain: { chainId: "—", prettyName: "—", score: 0, reason: "Parse error." }, alternatives: [], rationale: "Analysis failed.", warnings: [] };
+  }
+}
+
+// ── Stake Advisor ─────────────────────────────────────────────────────────────
+export async function generateStakeAdvice(
+  validators: L1Validator[],
+  amount: number,
+  riskProfile: "conservative" | "balanced" | "aggressive",
+  oracleHistory?: { ecosystemHealth: string; brief: string; blockHeight: number; activeMinitilas: number }[]
+): Promise<StakeAdvice> {
+  const totalPower = validators.reduce((s, v) => s + parseInt(v.voting_power || "0"), 0);
+
+  const valSummaries = validators
+    .filter(v => !v.jailed)
+    .sort((a, b) => parseInt(b.voting_power) - parseInt(a.voting_power))
+    .slice(0, 30)
+    .map(v => {
+      const vp = parseInt(v.voting_power || "0");
+      const vpPct = totalPower > 0 ? ((vp / totalPower) * 100).toFixed(1) : "0";
+      const commission = (parseFloat(v.commission_rate || "0") * 100).toFixed(1);
+      const missed = v.missed_blocks !== undefined ? ` | missed_blocks: ${v.missed_blocks}` : "";
+      return `- ${v.moniker} | vp: ${vpPct}% | commission: ${commission}%${missed}`;
+    }).join("\n");
+
+  const oracleCtx = buildOracleContext(oracleHistory);
+
+  const prompt = `A user wants to stake ${amount} INIT. Risk profile: ${riskProfile}.
+
+Active validators (sorted by voting power, top 30):
+${valSummaries}
+${oracleCtx}
+Risk profile guidance:
+- conservative: prefer low commission, established validators, avoid top-3 (decentralization)
+- balanced: mix of performance and decentralization
+- aggressive: optimize for lowest commission, don't mind smaller validators
+
+Return JSON:
+{
+  "recommendations": [
+    { "moniker": "...", "operator_address": "...", "score": 0-100, "rationale": "1-2 sentences with specific %", "risks": ["specific risk"] }
+  ],
+  "strategy": "1-2 sentences on overall staking strategy for this profile",
+  "warnings": ["any specific concern"]
+}
+Provide exactly 3 recommendations.`;
+
+  if (IS_MOCK) {
+    const top3 = validators.filter(v => !v.jailed).slice(0, 3);
+    return {
+      recommendations: top3.map((v, i) => ({ moniker: v.moniker, operator_address: v.operator_address, score: 80 - i * 5, rationale: "Mock mode.", risks: [] })),
+      strategy: "Mock mode — set AI_MOCK=false for real analysis.",
+      warnings: ["AI_MOCK=true"],
+    };
+  }
+
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 600,
+    system: ADVISOR_SYSTEM,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
+    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  try { return JSON.parse(raw) as StakeAdvice; } catch {
+    return { recommendations: [], strategy: "Analysis failed.", warnings: [] };
+  }
+}
+
+// ── Bridge Advisor ────────────────────────────────────────────────────────────
+export async function generateBridgeAdvice(
+  minitias: MinitiaWithMetrics[],
+  bridges: OpinitBridge[],
+  ibcChannels: IbcChannel[],
+  params: { token: string; fromChain: string; toChain: string },
+  oracleHistory?: { ecosystemHealth: string; brief: string; blockHeight: number; activeMinitilas: number }[]
+): Promise<BridgeAdvice> {
+  const fromMinitia = minitias.find(m => m.chainId === params.fromChain);
+  const toMinitia   = minitias.find(m => m.chainId === params.toChain);
+  const relevantBridges = bridges.slice(0, 10).map(b => {
+    const minitia = minitias.find(m => m.bridgeId === b.bridge_id);
+    const isLive = (minitia?.metrics?.blockHeight ?? 0) > 0;
+    const parts = [
+      `Bridge #${b.bridge_id} (${minitia?.prettyName ?? "unknown"})`,
+      `finality: ${b.config.finalization_period}`,
+      `submit: ${b.config.submission_interval}`,
+      `oracle: ${b.config.oracle_enabled}`,
+      `status: ${isLive ? "LIVE" : "offline"}`,
+      minitia?.metrics?.blockHeight ? `blocks: ${formatNumber(minitia.metrics.blockHeight)}` : "",
+      `da: ${b.batch_info?.chain_type ?? "INITIA"}`,
+    ].filter(Boolean);
+    return `- ${parts.join(" | ")}`;
+  }).join("\n");
+
+  const ibcSummary = ibcChannels
+    .filter(c => c.portId === "transfer")
+    .slice(0, 15)
+    .map(c => `- ${c.sourceChainId} → ${c.destChainId} (${c.channelId})`)
+    .join("\n");
+
+  const oracleCtx = buildOracleContext(oracleHistory);
+
+  const prompt = `A user wants to bridge ${params.token} from ${fromMinitia?.prettyName ?? params.fromChain} to ${toMinitia?.prettyName ?? params.toChain}.
+
+OPinit Bridges available:
+${relevantBridges}
+
+IBC Transfer Channels:
+${ibcSummary}
+${oracleCtx}
+Initia Bridge mechanics:
+- OPinit (Optimistic): deposit on L1 → minitia mints. Withdrawals take finality_period (often 7 days).
+- IBC: near-instant (<10s) for token transfers between connected chains.
+- For L1→Minitia: OPinit deposit is fast (same direction as fraud proof security).
+
+Return JSON:
+{
+  "path": ["step1 chain", "step2 chain"],
+  "total_time": "human readable estimate",
+  "steps": [
+    { "action": "what to do", "time": "time estimate", "note": "important detail" }
+  ],
+  "rationale": "1-2 sentences explaining why this path"
+}`;
+
+  if (IS_MOCK) {
+    return {
+      path: [params.fromChain, params.toChain],
+      total_time: "Mock mode",
+      steps: [{ action: `Bridge ${params.token}`, time: "—", note: "Set AI_MOCK=false for real analysis." }],
+      rationale: "Mock mode active.",
+    };
+  }
+
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 500,
+    system: ADVISOR_SYSTEM,
+    messages: [{ role: "user", content: prompt }],
+  });
+  const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
+    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+  try { return JSON.parse(raw) as BridgeAdvice; } catch {
+    return { path: [], total_time: "—", steps: [], rationale: "Analysis failed." };
+  }
+}
+
+export async function chatWithEcosystem(
+  message: string,
+  history: { role: "user" | "assistant"; content: string }[],
+  data: EcosystemOverview,
+  fullMode = false
+): Promise<string> {
+  if (IS_MOCK) return MOCK_CHAT_REPLY;
+
+  const context = buildEcosystemContext(data);
+
+  // Add Pulse Scores to context if available
+  const scoreContext = data.minitias
+    .filter(m => m.pulseScore && (m.metrics?.blockHeight ?? 0) > 0)
+    .sort((a, b) => (b.pulseScore?.total ?? 0) - (a.pulseScore?.total ?? 0))
+    .map(m => `- ${m.prettyName}: ${m.pulseScore!.total}/100 (activity:${m.pulseScore!.activity} decentralization:${m.pulseScore!.decentralization} bridge:${m.pulseScore!.bridge} growth:${m.pulseScore!.growth} uptime:${m.pulseScore!.uptime})`)
+    .join("\n");
+
+  const fullContext = scoreContext
+    ? `${context}\n\nPULSE SCORES (0-100 health rating per chain):\n${scoreContext}`
+    : context;
+
+  const messages: Anthropic.MessageParam[] = [
+    ...history.map((h) => ({ role: h.role, content: h.content })),
+    {
+      role: "user",
+      content: `${message}\n\n[CURRENT ECOSYSTEM DATA]\n${fullContext}`,
+    },
+  ];
+
+  const widgetRules = `
+CRITICAL FORMATTING RULES:
+- Answer in 2-4 SHORT sentences MAX. Never exceed 4 sentences.
+- NEVER use markdown headers (##), bullet points, bold (**), or code blocks.
+- Use plain conversational text only.`;
+
+  const fullRules = `
+FORMATTING RULES:
+- Be thorough but concise. Use 3-8 sentences.
+- You may use simple line breaks to separate ideas, but avoid heavy markdown.
+- Reference Pulse Scores (0-100) when comparing chains — they are computed from live data.
+- If the user asks about a specific chain, mention its Pulse Score breakdown (activity, decentralization, bridge, growth, uptime).
+- When mentioning bridging, tell the user they can bridge directly from this page.`;
+
+  const response = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: fullMode ? 500 : 250,
+    system: SYSTEM_PROMPT + `
+You are Pulse AI, the chat assistant for Initia Pulse.
+${fullMode ? fullRules : widgetRules}
+- If asked what the app does: "Initia Pulse monitors 13+ rollups in real-time, writes AI analysis on-chain via PulseOracle, and helps you deploy, stake, or bridge with live intelligence."
+- Ground every answer in the live ecosystem data provided. Be specific with numbers.`,
+    messages,
+  });
+
+  return response.content[0].type === "text" ? response.content[0].text : "Unable to process query.";
+}
