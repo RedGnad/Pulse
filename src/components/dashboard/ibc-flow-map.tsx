@@ -75,15 +75,18 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
       const isLive = (m?.metrics?.blockHeight ?? 0) > 0;
       const isOurs = m?.isOurs ?? id === "initia-pulse-1";
       const isMainnetRef = m?.isMainnetRef ?? false;
+      // External IBC peer = in IBC channels but not in our minitia list
+      const isExternalPeer = !m && !isOurs;
       const channelCount = transferChannels.filter(
         c => c.sourceChainId === id || c.destChainId === id
       ).length;
       return {
         id, name,
-        color: isMainnetRef ? "#4A6A7A" : isOurs ? "#00FF88" : chainColor(name),
-        isLive: isMainnetRef ? false : (isLive || isOurs),
+        color: isExternalPeer ? "#6A8A9A" : isMainnetRef ? "#4A6A7A" : isOurs ? "#00FF88" : chainColor(name),
+        isLive: isExternalPeer ? true : isMainnetRef ? false : (isLive || isOurs),
         isOurs,
         isMainnetRef,
+        isExternalPeer,
         txCount: m?.metrics?.totalTxCount ?? 0,
         blockHeight: m?.metrics?.blockHeight ?? 0,
         blockTime: m?.metrics?.avgBlockTime ?? null,
@@ -92,8 +95,9 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
       };
     }).sort((a, b) => {
       if (a.isOurs !== b.isOurs) return a.isOurs ? -1 : 1;
-      // Testnet live chains first, then testnet dormant, then mainnet refs last
+      // Live minitias first, then external IBC peers, then dormant, then mainnet refs last
       if (a.isMainnetRef !== b.isMainnetRef) return a.isMainnetRef ? 1 : -1;
+      if (a.isExternalPeer !== b.isExternalPeer) return a.isExternalPeer ? 1 : -1;
       if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
       return b.txCount - a.txCount;
     });
@@ -248,6 +252,8 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
           const isFocused = activeNodeId !== null;
           const nodeOpacity = node.isMainnetRef
             ? (active ? 0.7 : isFocused ? 0.12 : 0.4)
+            : node.isExternalPeer
+            ? (active ? 0.85 : isFocused ? 0.15 : 0.55)
             : active ? 1
             : isFocused ? (node.isLive ? 0.15 : 0.06)
             : (node.isLive ? 0.85 : 0.3);
@@ -281,7 +287,8 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 fill={`${node.color}${active ? "1A" : "0D"}`}
                 stroke={node.color}
                 strokeWidth={active ? 1.5 : 1}
-                strokeOpacity={active ? 0.7 : 0.3}
+                strokeOpacity={active ? 0.7 : node.isExternalPeer ? 0.4 : 0.3}
+                strokeDasharray={node.isExternalPeer ? "3 2" : "none"}
                 style={{ transition: "all 0.2s" }}
               />
 
@@ -337,6 +344,17 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 </text>
               )}
 
+              {node.isExternalPeer && (
+                <text x={node.x} y={node.y - nodeR - 8}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fill="#6A8A9A" fillOpacity={0.6}
+                  fontSize={6} fontFamily={MONO} letterSpacing="0.12em"
+                  style={{ pointerEvents: "none" }}
+                >
+                  IBC
+                </text>
+              )}
+
               {/* Pulse Score badge */}
               {node.pulseScore !== null && node.isLive && (
                 <g style={{ pointerEvents: "none" }}>
@@ -385,6 +403,9 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
               <span style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: "#E0F0FF" }}>
                 {node.name}
               </span>
+              {node.isExternalPeer && (
+                <span style={{ fontFamily: MONO, fontSize: 8, color: "#6A8A9A", letterSpacing: "0.1em" }}>IBC</span>
+              )}
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 14px" }}>
               <div>
@@ -428,14 +449,24 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
           <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#00FF88" }} />
           <span style={{ fontFamily: MONO, fontSize: 8, color: "#1E3040" }}>{liveCount} live</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 14, height: 0, borderTop: "1px dashed #1E3040" }} />
-          <span style={{ fontFamily: MONO, fontSize: 8, color: "#0D1A24" }}>dormant</span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2A3A4A", border: "1px solid #1E3040" }} />
-          <span style={{ fontFamily: MONO, fontSize: 8, color: "#FF3366", opacity: 0.5 }}>mainnet ref</span>
-        </div>
+        {nodes.some(n => n.isExternalPeer) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#6A8A9A", opacity: 0.6 }} />
+            <span style={{ fontFamily: MONO, fontSize: 8, color: "#6A8A9A" }}>IBC peer</span>
+          </div>
+        )}
+        {nodes.some(n => !n.isLive && !n.isExternalPeer && !n.isMainnetRef) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 14, height: 0, borderTop: "1px dashed #1E3040" }} />
+            <span style={{ fontFamily: MONO, fontSize: 8, color: "#0D1A24" }}>dormant</span>
+          </div>
+        )}
+        {nodes.some(n => n.isMainnetRef) && (
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2A3A4A", border: "1px solid #1E3040" }} />
+            <span style={{ fontFamily: MONO, fontSize: 8, color: "#FF3366", opacity: 0.5 }}>mainnet ref</span>
+          </div>
+        )}
       </div>
     </div>
   );
