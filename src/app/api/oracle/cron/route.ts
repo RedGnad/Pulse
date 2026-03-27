@@ -1,7 +1,10 @@
 /**
  * GET /api/oracle/cron
- * Triggered by Vercel Cron (or any external scheduler).
+ * Triggered by Vercel Cron or any external scheduler (e.g. cron-job.org).
  * Authenticates via CRON_SECRET header, then writes a snapshot.
+ *
+ * NOTE: Oracle writes require access to the rollup EVM RPC (typically localhost:8545).
+ * If the rollup isn't reachable from the server, the write will fail gracefully.
  */
 
 import { NextResponse } from "next/server";
@@ -33,7 +36,17 @@ export async function GET(req: Request) {
       },
     });
 
-    const data = await res.json();
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      return NextResponse.json(
+        { error: "Oracle returned non-JSON response", status: res.status, body: text.slice(0, 200) },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json(data, { status: res.status });
   } catch (err) {
     return NextResponse.json(

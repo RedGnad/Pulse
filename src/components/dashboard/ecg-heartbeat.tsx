@@ -249,8 +249,8 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
           pointerEvents: "none",
         }}>
           <VitalReadout label="Latest Block" value={vitals.latestHeight != null && vitals.latestHeight > 0 ? vitals.latestHeight.toLocaleString() : "—"} color="#00D4FF" />
-          <VitalReadout label="Avg Tx / Block" value={vitals.avgTx != null ? String(vitals.avgTx) : "—"} color="#FFB800" />
-          <VitalReadout label="Last Block Txs" value={vitals.latestTx != null ? String(vitals.latestTx) : "—"} color="#A78BFA" />
+          <VitalReadout label="Avg Tx / Block" value={vitals.avgTx != null ? String(vitals.avgTx) : "—"} color="#FFB800" hint={vitals.avgTx === 0 ? "testnet" : undefined} />
+          <VitalReadout label="Last Block Txs" value={vitals.latestTx != null ? String(vitals.latestTx) : "—"} color="#A78BFA" hint={vitals.latestTx === 0 ? "testnet" : undefined} />
         </div>
 
         {/* Bottom status bar */}
@@ -269,7 +269,7 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
               animation: "pulse-signal 2s infinite",
             }} />
             <span style={{ fontFamily: MONO, fontSize: 11, color: "#5A7A8A", letterSpacing: "0.1em" }}>
-              Live · Initia L1
+              Live · Initia L1 Testnet
             </span>
           </div>
           <span style={{ fontFamily: MONO, fontSize: 11, color: "#3A5A6A", letterSpacing: "0.1em" }}>
@@ -281,19 +281,26 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
   );
 }
 
-function VitalReadout({ label, value, color }: { label: string; value: string; color: string }) {
+function VitalReadout({ label, value, color, hint }: { label: string; value: string; color: string; hint?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 2 }}>
       <span style={{ fontFamily: MONO, fontSize: 11, letterSpacing: "0.1em", color: `${color}90`, textTransform: "uppercase" }}>
         {label}
       </span>
-      <span style={{
-        fontFamily: MONO, fontSize: 16, fontWeight: 700, color,
-        lineHeight: 1, fontVariantNumeric: "tabular-nums",
-        textShadow: `0 0 12px ${color}40`,
-      }}>
-        {value}
-      </span>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+        <span style={{
+          fontFamily: MONO, fontSize: 16, fontWeight: 700, color,
+          lineHeight: 1, fontVariantNumeric: "tabular-nums",
+          textShadow: `0 0 12px ${color}40`,
+        }}>
+          {value}
+        </span>
+        {hint && (
+          <span style={{ fontFamily: MONO, fontSize: 9, color: "#3A5A6A", letterSpacing: "0.05em" }}>
+            {hint}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

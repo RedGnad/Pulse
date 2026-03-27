@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { useEcosystem } from "@/hooks/use-ecosystem";
 import { useInsights } from "@/hooks/use-insights";
+import { useOracle } from "@/hooks/use-oracle";
+import { SnapshotCountdown } from "@/components/snapshot-countdown";
 import { IbcFlowMap } from "./ibc-flow-map";
 import { ChainPanel } from "./chain-panel";
 import { EcgHeartbeat } from "./ecg-heartbeat";
@@ -20,6 +22,7 @@ const SANS = "var(--font-chakra), sans-serif";
 export function DashboardContent() {
   const { data, isLoading, error } = useEcosystem();
   const { data: insights } = useInsights();
+  const { data: oracle } = useOracle();
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
 
   const selectedMinitia = selectedChain
@@ -204,9 +207,7 @@ export function DashboardContent() {
               AI Analysis
             </span>
             <div style={{ flex: 1, height: 1, background: "rgba(0,255,136,0.06)" }} />
-            <span style={{ fontFamily: MONO, fontSize: 11, color: "#5A7A8A" }}>
-              Updated every 5 min
-            </span>
+            <SnapshotCountdown latestTimestamp={oracle?.latest ? Number(oracle.latest.timestamp) : null} />
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {nuggets.map((nugget, i) => (
@@ -298,7 +299,7 @@ export function DashboardContent() {
             step: "02",
             icon: <ShieldCheck style={{ width: 16, height: 16 }} />,
             label: "Verify",
-            desc: "AI intelligence written on-chain every 5 min. Trustless, immutable, composable by any contract.",
+            desc: "AI intelligence written on-chain every 5 min — trustless, immutable, composable by any contract.",
             accent: "#00D4FF",
             active: false,
           },

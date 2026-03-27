@@ -6,6 +6,7 @@ import { useOracle } from "@/hooks/use-oracle";
 import { useChainStatus } from "@/hooks/use-chain-status";
 import { SnapshotEntry } from "@/hooks/use-oracle";
 import { Database, Zap, RefreshCw, Activity, ExternalLink, Code2, CheckCircle2, Clock, Cpu, Radio, AlertCircle, Satellite, Brain, Link2, HardDrive, Search, ChevronDown, Copy, Check, ShieldCheck } from "lucide-react";
+import { SnapshotCountdown } from "@/components/snapshot-countdown";
 
 const ORACLE_ADDR = "0xB7C25af401137597C896685Fc195e0143c54de7A";
 const CHAIN_ID    = "initia-pulse-1";
@@ -474,7 +475,8 @@ export default function OraclePage() {
           </div>
           <p style={{ fontFamily: "var(--font-jetbrains), monospace", fontSize: 14, color: "#8AB4C8", margin: 0, lineHeight: 1.6 }}>
             On-chain intelligence layer running on our own EVM rollup.
-            The AI monitors 13+ rollups and writes a live ecosystem snapshot every 5 minutes — composable, immutable, readable by any smart contract.
+            The AI monitors 13+ rollups and writes a live ecosystem snapshot every 5 minutes — composable, immutable, readable by any smart contract.{" "}
+            <SnapshotCountdown latestTimestamp={data?.latest ? Number(data.latest.timestamp) : null} color="#6A9AB0" />
           </p>
         </div>
 
@@ -705,7 +707,7 @@ export default function OraclePage() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16, padding: "10px 0", borderTop: "1px solid rgba(0,255,136,0.04)" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Clock style={{ width: 11, height: 11, color: "#3A5A6A" }} />
-              {mono("Every 5 minutes", 11, "#3A5A6A")}
+              <SnapshotCountdown latestTimestamp={data?.latest ? Number(data.latest.timestamp) : null} />
             </div>
             <div style={{ width: 1, height: 10, background: "rgba(0,255,136,0.06)" }} />
             {mono("Gas: 0 (free)", 11, "#3A5A6A")}
