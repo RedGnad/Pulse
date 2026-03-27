@@ -126,7 +126,7 @@ export function DashboardContent() {
             { label: "Live Rollups", value: String(liveMinitias.length), color: "#00FF88", icon: <Activity style={{ width: 14, height: 14 }} /> },
             { label: "IBC Channels", value: String(transferChannels.length), color: "#00D4FF", icon: <Globe style={{ width: 14, height: 14 }} /> },
             { label: "L1 Block Height", value: data.l1.blockHeight > 0 ? formatNumber(data.l1.blockHeight) : "—", color: "#5A7A8A", icon: <Database style={{ width: 14, height: 14 }} /> },
-            { label: "Oracle Writes", value: "5min", color: "#A78BFA", icon: <ShieldCheck style={{ width: 14, height: 14 }} /> },
+            { label: "Oracle Writes", value: null as React.ReactNode, color: "#A78BFA", icon: <ShieldCheck style={{ width: 14, height: 14 }} />, isCountdown: true },
           ].map(m => (
             <div key={m.label} style={{
               padding: "16px 18px",
@@ -140,9 +140,13 @@ export function DashboardContent() {
                   {m.label}
                 </span>
               </div>
-              <span style={{ fontFamily: SANS, fontSize: 28, fontWeight: 700, color: m.color, lineHeight: 1 }}>
-                {m.value}
-              </span>
+              {"isCountdown" in m && m.isCountdown ? (
+                <SnapshotCountdown latestTimestamp={oracle?.latest ? Number(oracle.latest.timestamp) : null} fontSize={22} color={m.color} mono={false} />
+              ) : (
+                <span style={{ fontFamily: SANS, fontSize: 28, fontWeight: 700, color: m.color, lineHeight: 1 }}>
+                  {m.value}
+                </span>
+              )}
             </div>
           ))}
         </div>
