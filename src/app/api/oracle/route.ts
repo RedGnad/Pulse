@@ -74,8 +74,9 @@ export async function POST(req: Request) {
       lastUpdated: new Date().toISOString(),
     };
 
-    // 2. Generate AI insights — always real (oracle snapshots must have live data)
-    const insights = await generateInsights(ecosystemData, true);
+    // 2. Generate AI insights (forceReal=true in prod, respects AI_MOCK in dev)
+    const forceReal = process.env.AI_MOCK !== "true";
+    const insights = await generateInsights(ecosystemData, forceReal);
 
     // 3. Prepare on-chain snapshot parameters
     const liveMinitias = minitiasWith.filter(m => (m.metrics?.blockHeight ?? 0) > 0);

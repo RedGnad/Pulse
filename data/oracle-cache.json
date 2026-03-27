@@ -1,6 +1,116 @@
 {
-  "snapshotCount": "0",
-  "latest": null,
-  "history": [],
-  "healthLabel": "unknown"
+  "snapshotCount": "138",
+  "latest": {
+    "timestamp": "1774403040",
+    "blockHeight": 21204343,
+    "activeMinitilas": 6,
+    "ibcChannels": 4,
+    "totalValidators": 11,
+    "totalTxCount": 24925810,
+    "ecosystemHealth": "growing",
+    "brief": "Initia testnet ecosystem operating at full capacity with all 6 minitias reachable and synchronized at ~14.7M blocks. EVM, Move, and Wasm chains are running in lock-step with consistent block times (~38s), while Strat lags significantly and Initia Pulse remains in early bootstrap phase."
+  },
+  "history": [
+    {
+      "timestamp": "1774403040",
+      "blockHeight": 21204343,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 24925810,
+      "ecosystemHealth": "growing",
+      "brief": "Initia testnet ecosystem operating at full capacity with all 6 minitias reachable and synchronized at ~14.7M blocks. EVM, Move, and Wasm chains are running in lock-step with consistent block times (~38s), while Strat lags significantly and Initia Pulse remains in early bootstrap phase."
+    },
+    {
+      "timestamp": "1774388240",
+      "blockHeight": 21197356,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 24918734,
+      "ecosystemHealth": "growing",
+      "brief": "Testnet ecosystem operating at full capacity with 6 active minitias and 28.79M cumulative transactions. EVM, Move, and Wasm chains are synchronized at ~14.7M blocks, while Strat remains an early-stage testnet deployment with 1.01M blocks. Interwoven Bridge maintaining 7 active channels (4 token, 3 NFT) with no reachability issues."
+    },
+    {
+      "timestamp": "1774630467",
+      "blockHeight": 21308994,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25034280,
+      "ecosystemHealth": "growing",
+      "brief": "The Initia ecosystem is running normally across its interconnected rollup network. Multiple minitias are processing transactions and producing blocks at consistent rates. Cross-rollup IBC channels remain active."
+    },
+    {
+      "timestamp": "1774630457",
+      "blockHeight": 21308994,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25034280,
+      "ecosystemHealth": "growing",
+      "brief": "The Initia ecosystem is running normally across its interconnected rollup network. Multiple minitias are processing transactions and producing blocks at consistent rates. Cross-rollup IBC channels remain active."
+    },
+    {
+      "timestamp": "1774630448",
+      "blockHeight": 21308994,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25034280,
+      "ecosystemHealth": "growing",
+      "brief": "The Initia ecosystem is running normally across its interconnected rollup network. Multiple minitias are processing transactions and producing blocks at consistent rates. Cross-rollup IBC channels remain active."
+    },
+    {
+      "timestamp": "1774630438",
+      "blockHeight": 21308978,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25034261,
+      "ecosystemHealth": "growing",
+      "brief": "The Initia ecosystem is running normally across its interconnected rollup network. Multiple minitias are processing transactions and producing blocks at consistent rates. Cross-rollup IBC channels remain active."
+    },
+    {
+      "timestamp": "1774630423",
+      "blockHeight": 21308978,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25034261,
+      "ecosystemHealth": "growing",
+      "brief": "The Initia ecosystem is running normally across its interconnected rollup network. Multiple minitias are processing transactions and producing blocks at consistent rates. Cross-rollup IBC channels remain active."
+    },
+    {
+      "timestamp": "1774466026",
+      "blockHeight": 21233368,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 24955712,
+      "ecosystemHealth": "growing",
+      "brief": "The Initia testnet ecosystem is operating at full capacity with all 6 minitias reachable and synchronized around 14.8M blocks. Three core chains (EVM, Move, Wasm) are processing transactions at nearly identical rates (~7.3M each), while Strat and Initia Pulse show significantly lower activity, suggesting they are either newer deployments or specialized rollups with lower throughput demands."
+    },
+    {
+      "timestamp": "1774465879",
+      "blockHeight": 21233299,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 24955642,
+      "ecosystemHealth": "thriving",
+      "brief": "Initia testnet ecosystem operating at full capacity with 6 minitias live and synchronized block production across EVM, Move, and Wasm chains (~14.8M blocks each). Strat testnet lagging significantly behind primary chains, while Initia Pulse remains in early bootstrap phase with minimal block height."
+    },
+    {
+      "timestamp": "1774403134",
+      "blockHeight": 21204360,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 24925829,
+      "ecosystemHealth": "growing",
+      "brief": "Initia testnet ecosystem operating at healthy baseline with 6 live minitias processing 28.82M cumulative transactions. Three primary chains (EVM, Move, Wasm) maintain synchronized block heights around 14.7M with consistent 95–97s block times, while Inertia lags at 12.42M blocks. Strat and Initia Pulse show emerging activity with 1.01M and 2.4K blocks respectively."
+    }
+  ],
+  "healthLabel": "growing"
 }
