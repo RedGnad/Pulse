@@ -15,6 +15,7 @@ import {
 import { useInterwovenKit } from "@initia/interwovenkit-react";
 import { useEcosystem } from "@/hooks/use-ecosystem";
 import { scoreColor } from "@/lib/pulse-score";
+import { Header } from "@/components/header";
 
 interface ChatMsg {
   role: "user" | "assistant";
@@ -183,44 +184,47 @@ export default function AskPulsePage() {
   const hasMessages = chat.length > 0;
 
   return (
-    <div
-      style={{
-        minHeight: "calc(100vh - 60px)",
-        display: "flex",
-        flexDirection: "column",
-        position: "relative",
-      }}
-    >
-      {/* Background ambient effect */}
-      <div
-        style={{
-          position: "fixed",
-          top: 60,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 800,
-          height: 600,
-          background:
-            "radial-gradient(ellipse, rgba(0,255,136,0.03) 0%, transparent 70%)",
-          pointerEvents: "none",
-          zIndex: 0,
-        }}
-      />
+    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+      <Header />
 
-      {/* Main content area */}
       <div
         style={{
           flex: 1,
-          maxWidth: 820,
-          width: "100%",
-          margin: "0 auto",
-          padding: "0 24px",
           display: "flex",
           flexDirection: "column",
           position: "relative",
-          zIndex: 1,
         }}
       >
+        {/* Background ambient effect */}
+        <div
+          style={{
+            position: "fixed",
+            top: 60,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 800,
+            height: 600,
+            background:
+              "radial-gradient(ellipse, rgba(0,255,136,0.03) 0%, transparent 70%)",
+            pointerEvents: "none",
+            zIndex: 0,
+          }}
+        />
+
+        {/* Main content area */}
+        <div
+          style={{
+            flex: 1,
+            maxWidth: 820,
+            width: "100%",
+            margin: "0 auto",
+            padding: "0 24px",
+            display: "flex",
+            flexDirection: "column",
+            position: "relative",
+            zIndex: 1,
+          }}
+        >
         {/* Empty state — hero + categories */}
         {!hasMessages && (
           <div
@@ -398,13 +402,49 @@ export default function AskPulsePage() {
             style={{
               flex: 1,
               overflowY: "auto",
-              paddingTop: 32,
+              paddingTop: 16,
               paddingBottom: 140,
               display: "flex",
               flexDirection: "column",
               gap: 24,
             }}
           >
+            {/* Chat header with title + new chat */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "8px 0", borderBottom: "1px solid rgba(0,255,136,0.06)",
+              marginBottom: 8,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <Sparkles style={{ width: 14, height: 14, color: "#00FF88" }} />
+                <span style={{
+                  fontFamily: "var(--font-chakra), sans-serif",
+                  fontSize: 15, fontWeight: 700, color: "#E0F0FF",
+                }}>Ask Pulse</span>
+                <span style={{
+                  fontFamily: "var(--font-jetbrains), monospace",
+                  fontSize: 11, color: "#3A5A6A",
+                }}>{chat.filter(m => m.role === "user").length} messages</span>
+              </div>
+              <button
+                onClick={() => setChat([])}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "5px 12px", borderRadius: 4,
+                  border: "1px solid rgba(0,255,136,0.1)",
+                  background: "rgba(0,255,136,0.03)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-jetbrains), monospace",
+                  fontSize: 11, color: "#5A7A8A",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(0,255,136,0.25)"; e.currentTarget.style.color = "#00FF88"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(0,255,136,0.1)"; e.currentTarget.style.color = "#5A7A8A"; }}
+              >
+                New chat
+              </button>
+            </div>
+
             {chat.map((m, i) => (
               <MessageBubble key={i} msg={m} />
             ))}
@@ -496,6 +536,7 @@ export default function AskPulsePage() {
             <div ref={chatEndRef} />
           </div>
         )}
+      </div>
       </div>
 
       {/* Input bar — fixed at bottom */}
