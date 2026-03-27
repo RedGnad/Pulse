@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useMemo } from "react";
 import { L1Block } from "@/lib/types";
+import { useNetwork } from "@/contexts/network-context";
 
 const MONO = "var(--font-jetbrains), monospace";
 
@@ -48,6 +49,7 @@ interface EcgHeartbeatProps {
 }
 
 export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) {
+  const { isMainnet } = useNetwork();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef<number>(0);
@@ -249,8 +251,8 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
           pointerEvents: "none",
         }}>
           <VitalReadout label="Latest Block" value={vitals.latestHeight != null && vitals.latestHeight > 0 ? vitals.latestHeight.toLocaleString() : "—"} color="#00D4FF" />
-          <VitalReadout label="Avg Tx / Block" value={vitals.avgTx != null ? String(vitals.avgTx) : "—"} color="#FFB800" hint={vitals.avgTx === 0 ? "testnet" : undefined} />
-          <VitalReadout label="Last Block Txs" value={vitals.latestTx != null ? String(vitals.latestTx) : "—"} color="#A78BFA" hint={vitals.latestTx === 0 ? "testnet" : undefined} />
+          <VitalReadout label="Avg Tx / Block" value={vitals.avgTx != null ? String(vitals.avgTx) : "—"} color="#FFB800" hint={vitals.avgTx === 0 && !isMainnet ? "testnet" : undefined} />
+          <VitalReadout label="Last Block Txs" value={vitals.latestTx != null ? String(vitals.latestTx) : "—"} color="#A78BFA" hint={vitals.latestTx === 0 && !isMainnet ? "testnet" : undefined} />
         </div>
 
         {/* Bottom status bar */}
@@ -269,7 +271,7 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
               animation: "pulse-signal 2s infinite",
             }} />
             <span style={{ fontFamily: MONO, fontSize: 11, color: "#5A7A8A", letterSpacing: "0.1em" }}>
-              Live · Initia L1 Testnet
+              Live · Initia L1 {isMainnet ? "Mainnet" : "Testnet"}
             </span>
           </div>
           <span style={{ fontFamily: MONO, fontSize: 11, color: "#3A5A6A", letterSpacing: "0.1em" }}>

@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { WagmiProvider } from "wagmi";
+import { NetworkProvider } from "@/contexts/network-context";
 import {
   InterwovenKitProvider,
   TESTNET,
@@ -62,7 +63,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
           defaultChainId={PULSE_CHAIN_ID}
           customChain={pulseChain}
         >
-          {mounted ? children : null}
+          <NetworkProvider>
+            {mounted ? children : null}
+          </NetworkProvider>
         </InterwovenKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

@@ -15,6 +15,7 @@ import {
   Activity, Database,
 } from "lucide-react";
 import { formatNumber } from "@/lib/format";
+import { useNetwork } from "@/contexts/network-context";
 
 const MONO = "var(--font-jetbrains), monospace";
 const SANS = "var(--font-chakra), sans-serif";
@@ -23,6 +24,7 @@ export function DashboardContent() {
   const { data, isLoading, error } = useEcosystem();
   const { data: insights } = useInsights();
   const { data: oracle } = useOracle();
+  const { isMainnet } = useNetwork();
   const [selectedChain, setSelectedChain] = useState<string | null>(null);
 
   const selectedMinitia = selectedChain

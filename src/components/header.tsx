@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
+import { useNetwork } from "@/contexts/network-context";
 
 function useClock() {
   const [time, setTime] = useState("");
@@ -66,9 +67,54 @@ function WalletButton() {
   );
 }
 
+function NetworkToggle() {
+  const { network, toggle, isMainnet } = useNetwork();
+  return (
+    <button
+      onClick={toggle}
+      title={`Switch to ${isMainnet ? "testnet" : "mainnet"}`}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "5px 10px",
+        border: `1px solid ${isMainnet ? "rgba(255,184,0,0.25)" : "rgba(0,255,136,0.12)"}`,
+        borderRadius: 4,
+        background: isMainnet ? "rgba(255,184,0,0.06)" : "rgba(0,255,136,0.03)",
+        cursor: "pointer",
+        transition: "all 0.25s",
+      }}
+    >
+      {/* Toggle track */}
+      <div style={{
+        position: "relative", width: 28, height: 14, borderRadius: 7,
+        background: isMainnet ? "rgba(255,184,0,0.3)" : "rgba(0,255,136,0.2)",
+        transition: "background 0.25s",
+      }}>
+        <div style={{
+          position: "absolute", top: 2, width: 10, height: 10, borderRadius: "50%",
+          background: isMainnet ? "#FFB800" : "#00FF88",
+          boxShadow: `0 0 6px ${isMainnet ? "#FFB800" : "#00FF88"}`,
+          left: isMainnet ? 16 : 2,
+          transition: "left 0.25s, background 0.25s",
+        }} />
+      </div>
+      <span style={{
+        fontFamily: "var(--font-jetbrains), monospace",
+        fontSize: 9, fontWeight: 600,
+        letterSpacing: "0.1em", textTransform: "uppercase",
+        color: isMainnet ? "#FFB800" : "#5A7A8A",
+        transition: "color 0.25s",
+        minWidth: 52,
+      }}>
+        {network}
+      </span>
+    </button>
+  );
+}
+
 export function Header() {
   const pathname = usePathname();
   const time = useClock();
+  const { isMainnet } = useNetwork();
 
   return (
     <header style={{
@@ -138,23 +184,29 @@ export function Header() {
 
           <div style={{ width: 1, height: 18, background: "rgba(0,255,136,0.08)", margin: "0 8px" }} />
 
+          <NetworkToggle />
+
           <WalletButton />
 
           {/* Live indicator */}
           <div style={{
             display: "flex", alignItems: "center", gap: 6,
             marginLeft: 6, padding: "6px 10px",
-            border: "1px solid rgba(0,255,136,0.12)", borderRadius: 4,
-            background: "rgba(0,255,136,0.03)",
+            border: `1px solid ${isMainnet ? "rgba(255,184,0,0.12)" : "rgba(0,255,136,0.12)"}`, borderRadius: 4,
+            background: isMainnet ? "rgba(255,184,0,0.03)" : "rgba(0,255,136,0.03)",
+            transition: "all 0.25s",
           }}>
             <span style={{
               display: "block", width: 6, height: 6, borderRadius: "50%",
-              background: "#00FF88", boxShadow: "0 0 8px #00FF88",
+              background: isMainnet ? "#FFB800" : "#00FF88",
+              boxShadow: `0 0 8px ${isMainnet ? "#FFB800" : "#00FF88"}`,
               animation: "pulse-glow-green 2s infinite",
             }} />
             <span style={{
               fontFamily: "var(--font-jetbrains), monospace",
-              fontSize: 10, fontWeight: 500, color: "#00FF88", letterSpacing: "0.1em",
+              fontSize: 10, fontWeight: 500,
+              color: isMainnet ? "#FFB800" : "#00FF88",
+              letterSpacing: "0.1em",
             }}>
               Live
             </span>

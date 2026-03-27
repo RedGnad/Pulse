@@ -1,4 +1,5 @@
 import { MinitiaInfo, IbcChannel } from "./types";
+import type { NetworkMode } from "./initia-client";
 
 const REGISTRY_BASE =
   "https://raw.githubusercontent.com/initia-labs/initia-registry/main";
@@ -175,7 +176,25 @@ const OUR_MINITIA: MinitiaInfo | null = (PULSE_REST && PULSE_RPC) ? {
   isOurs: true,
 } : null;
 
-export async function fetchEcosystemData() {
+export async function fetchEcosystemData(network: NetworkMode = "testnet") {
+  if (network === "mainnet") {
+    // Mainnet mode: mainnet chains are primary, no testnet minitias
+    const [l1Data, mainnetChains] = await Promise.all([
+      fetchChainJson("initia", "mainnets").then(chain => {
+        if (!chain) throw new Error("Failed to fetch Initia L1 (mainnet) chain.json");
+        return { l1: parseChain(chain, "initia"), ibcChannels: parseIbcChannels(chain) };
+      }),
+      fetchMinitiaList(MAINNET_MINITIAS, "mainnets", false),
+    ]);
+
+    return {
+      l1: l1Data.l1,
+      minitias: mainnetChains,
+      ibcChannels: l1Data.ibcChannels,
+    };
+  }
+
+  // Testnet mode (default): testnet chains primary, mainnet as refs
   const [l1Data, minitias, mainnetRefs] = await Promise.all([
     fetchInitiaL1(),
     fetchAllMinitias(),

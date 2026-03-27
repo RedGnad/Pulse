@@ -1,10 +1,11 @@
-import { apiFetch, apiFetchSafe, L1_REST, L1_INDEX } from "./initia-client";
+import { apiFetch, apiFetchSafe, L1_REST, L1_INDEX, getL1Urls, type NetworkMode } from "./initia-client";
 import { L1Block, L1Validator, OpinitBridge, Proposal, ProposalTally, ValidatorVote } from "./types";
 
 // ─── Blocks (indexer) ─────────────────────────────────────────────────────────
-export async function fetchRecentBlocks(limit = 10): Promise<L1Block[]> {
+export async function fetchRecentBlocks(limit = 10, network?: NetworkMode): Promise<L1Block[]> {
+  const { index } = getL1Urls(network);
   const data = await apiFetchSafe<{ blocks: unknown[] }>(
-    `${L1_INDEX}/indexer/block/v1/blocks?pagination.limit=${limit}&pagination.reverse=true`,
+    `${index}/indexer/block/v1/blocks?pagination.limit=${limit}&pagination.reverse=true`,
     { blocks: [] }
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -20,26 +21,29 @@ export async function fetchRecentBlocks(limit = 10): Promise<L1Block[]> {
   }));
 }
 
-export async function fetchL1TxCount(): Promise<number> {
+export async function fetchL1TxCount(network?: NetworkMode): Promise<number> {
+  const { index } = getL1Urls(network);
   const data = await apiFetchSafe<{ pagination: { total: string } }>(
-    `${L1_INDEX}/indexer/tx/v1/txs?pagination.limit=1&pagination.count_total=true`,
+    `${index}/indexer/tx/v1/txs?pagination.limit=1&pagination.count_total=true`,
     { pagination: { total: "0" } }
   );
   return parseInt(data.pagination?.total ?? "0", 10);
 }
 
-export async function fetchL1BlockHeight(): Promise<number> {
+export async function fetchL1BlockHeight(network?: NetworkMode): Promise<number> {
+  const { rest } = getL1Urls(network);
   const data = await apiFetchSafe<{ block: { header: { height: string } } }>(
-    `${L1_REST}/cosmos/base/tendermint/v1beta1/blocks/latest`,
+    `${rest}/cosmos/base/tendermint/v1beta1/blocks/latest`,
     { block: { header: { height: "0" } } }
   );
   return parseInt(data.block?.header?.height ?? "0", 10);
 }
 
 // ─── Validators (mstaking) ────────────────────────────────────────────────────
-export async function fetchValidators(): Promise<{ validators: L1Validator[]; total: number }> {
+export async function fetchValidators(network?: NetworkMode): Promise<{ validators: L1Validator[]; total: number }> {
+  const { rest } = getL1Urls(network);
   const data = await apiFetchSafe<{ validators: unknown[]; pagination: { total: string } }>(
-    `${L1_REST}/initia/mstaking/v1/validators?status=BOND_STATUS_BONDED&pagination.limit=50`,
+    `${rest}/initia/mstaking/v1/validators?status=BOND_STATUS_BONDED&pagination.limit=50`,
     { validators: [], pagination: { total: "0" } }
   );
 
@@ -64,9 +68,10 @@ export async function fetchValidators(): Promise<{ validators: L1Validator[]; to
 }
 
 // ─── OPinit Bridges (the Interwoven Bridge data) ──────────────────────────────
-export async function fetchBridges(): Promise<OpinitBridge[]> {
+export async function fetchBridges(network?: NetworkMode): Promise<OpinitBridge[]> {
+  const { rest } = getL1Urls(network);
   const data = await apiFetchSafe<{ bridges: unknown[] }>(
-    `${L1_REST}/opinit/ophost/v1/bridges?pagination.limit=100`,
+    `${rest}/opinit/ophost/v1/bridges?pagination.limit=100`,
     { bridges: [] }
   );
 
@@ -93,9 +98,10 @@ export async function fetchBridges(): Promise<OpinitBridge[]> {
 }
 
 // ─── Governance ───────────────────────────────────────────────────────────────
-export async function fetchProposals(limit = 20): Promise<{ proposals: Proposal[]; total: number }> {
+export async function fetchProposals(limit = 20, network?: NetworkMode): Promise<{ proposals: Proposal[]; total: number }> {
+  const { rest } = getL1Urls(network);
   const data = await apiFetchSafe<{ proposals: unknown[]; pagination: { total: string } }>(
-    `${L1_REST}/cosmos/gov/v1/proposals?pagination.limit=${limit}&pagination.reverse=true`,
+    `${rest}/cosmos/gov/v1/proposals?pagination.limit=${limit}&pagination.reverse=true`,
     { proposals: [], pagination: { total: "0" } }
   );
 
@@ -189,13 +195,13 @@ export async function fetchInitSupply(): Promise<string> {
 }
 
 // ─── Aggregate L1 data ────────────────────────────────────────────────────────
-export async function fetchL1Data() {
+export async function fetchL1Data(network?: NetworkMode) {
   const [recentBlocks, txCount, blockHeight, validatorData, bridges] = await Promise.allSettled([
-    fetchRecentBlocks(20),
-    fetchL1TxCount(),
-    fetchL1BlockHeight(),
-    fetchValidators(),
-    fetchBridges(),
+    fetchRecentBlocks(20, network),
+    fetchL1TxCount(network),
+    fetchL1BlockHeight(network),
+    fetchValidators(network),
+    fetchBridges(network),
   ]);
 
   return {

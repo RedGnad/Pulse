@@ -4,15 +4,19 @@ import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
 import { fetchL1Data, fetchProposals } from "@/lib/l1-api";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
+import type { NetworkMode } from "@/lib/initia-client";
 
 export const revalidate = 30;
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const network = (searchParams.get("network") === "mainnet" ? "mainnet" : "testnet") as NetworkMode;
+
   try {
     const [{ minitias, ibcChannels }, l1Data, proposalData] = await Promise.all([
-      fetchEcosystemData(),
-      fetchL1Data(),
-      fetchProposals(10),
+      fetchEcosystemData(network),
+      fetchL1Data(network),
+      fetchProposals(10, network),
     ]);
 
     const minitiasWith = await fetchAllMinitiaMetrics(minitias);
@@ -27,9 +31,11 @@ export async function GET() {
       (p) => p.status === "PROPOSAL_STATUS_VOTING_PERIOD"
     ).length;
 
+    const l1ChainId = network === "mainnet" ? "interwoven-1" : "initiation-2";
+
     const overview: EcosystemOverview = {
       l1: {
-        chainId: "initiation-2",
+        chainId: l1ChainId,
         blockHeight: l1Data.blockHeight,
         totalTxCount: l1Data.txCount,
         recentBlocks: l1Data.recentBlocks,

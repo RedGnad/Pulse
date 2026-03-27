@@ -23,6 +23,21 @@ export async function apiFetchSafe<T>(url: string, fallback: T, timeoutMs = 5000
   }
 }
 
+// Testnet endpoints
 export const L1_REST  = "https://rest.testnet.initia.xyz";
 export const L1_RPC   = "https://rpc.testnet.initia.xyz";
 export const L1_INDEX = "https://api.testnet.initia.xyz";
+
+// Mainnet endpoints
+export const L1_REST_MAINNET  = "https://rest.initia.xyz";
+export const L1_RPC_MAINNET   = "https://rpc.initia.xyz";
+export const L1_INDEX_MAINNET = "https://api.initia.xyz";
+
+export type NetworkMode = "testnet" | "mainnet";
+
+export function getL1Urls(network: NetworkMode = "testnet") {
+  if (network === "mainnet") {
+    return { rest: L1_REST_MAINNET, rpc: L1_RPC_MAINNET, index: L1_INDEX_MAINNET };
+  }
+  return { rest: L1_REST, rpc: L1_RPC, index: L1_INDEX };
+}
