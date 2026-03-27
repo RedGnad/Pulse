@@ -69,33 +69,79 @@ export interface FullOracleData {
   healthLabel: string;
 }
 
-/** Read full oracle data (snapshot count, history, health label). */
+/* ── In-memory cache for graceful offline fallback ── */
+let _cachedData: (FullOracleData & { cachedAt: number }) | null = null;
+
+// Seed cache from static file on first load (survives Vercel cold starts)
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const seed = require("@/../data/oracle-cache.json") as FullOracleData;
+  if (seed?.history?.length) {
+    _cachedData = { ...seed, cachedAt: 0 };
+  }
+} catch {
+  // No seed file — cache starts empty
+}
+
+/** Dump current cache to data/oracle-cache.json for cold-start persistence. */
+export async function dumpCacheToFile(): Promise<void> {
+  if (!_cachedData || !_cachedData.history.length) return;
+  try {
+    const fs = await import("fs/promises");
+    const path = await import("path");
+    const filePath = path.join(process.cwd(), "data", "oracle-cache.json");
+    const { cachedAt: _, ...data } = _cachedData;
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2));
+    console.log("[oracle-reader] Cache dumped to", filePath);
+  } catch (err) {
+    console.warn("[oracle-reader] Could not dump cache:", err);
+  }
+}
+
+function cacheData(data: FullOracleData) {
+  if (data.history.length > 0) {
+    _cachedData = { ...data, cachedAt: Date.now() };
+  }
+}
+
+/** Read full oracle data (snapshot count, history, health label). Falls back to cache if rollup is offline. */
 export async function readOracleData(): Promise<FullOracleData> {
   const { oracleAddr, rpcUrl, chainId } = getEnv();
   if (!oracleAddr) throw new Error("PULSE_ORACLE_ADDRESS not set");
 
-  const { ethers } = await import("ethers");
-  const network = ethers.Network.from(Number(chainId));
-  const provider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
-  const oracle = new ethers.Contract(oracleAddr, HISTORY_ABI, provider);
+  try {
+    const { ethers } = await import("ethers");
+    const network = ethers.Network.from(Number(chainId));
+    const provider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
+    const oracle = new ethers.Contract(oracleAddr, HISTORY_ABI, provider);
 
-  const [count, label, rawHistory] = await Promise.all([
-    oracle.snapshotCount() as Promise<bigint>,
-    oracle.healthLabel() as Promise<string>,
-    oracle.getHistory() as Promise<RawSnap[]>,
-  ]);
+    const [count, label, rawHistory] = await Promise.all([
+      oracle.snapshotCount() as Promise<bigint>,
+      oracle.healthLabel() as Promise<string>,
+      oracle.getHistory() as Promise<RawSnap[]>,
+    ]);
 
-  if (Number(count) === 0) {
-    return { snapshotCount: "0", latest: null, history: [], healthLabel: label };
+    if (Number(count) === 0) {
+      return { snapshotCount: "0", latest: null, history: [], healthLabel: label };
+    }
+
+    const history = parseRaw(rawHistory);
+    const result = {
+      snapshotCount: count.toString(),
+      latest: history[0] ?? null,
+      history,
+      healthLabel: label,
+    };
+    cacheData(result);
+    return result;
+  } catch (err) {
+    // Rollup offline — return cached data if available
+    if (_cachedData) {
+      console.log("[oracle-reader] Rollup offline, serving cached data from", new Date(_cachedData.cachedAt).toISOString());
+      return _cachedData;
+    }
+    throw err;
   }
-
-  const history = parseRaw(rawHistory);
-  return {
-    snapshotCount: count.toString(),
-    latest: history[0] ?? null,
-    history,
-    healthLabel: label,
-  };
 }
 
 /**
@@ -123,8 +169,17 @@ export async function readOracleHistory(timeoutMs = 2500): Promise<OracleHistory
       ),
     ]);
 
-    return parseRaw(rawHistory);
+    const parsed = parseRaw(rawHistory);
+    // Update cache
+    if (parsed.length > 0 && _cachedData) {
+      _cachedData = { ..._cachedData, history: parsed, latest: parsed[0] ?? null, cachedAt: Date.now() };
+    }
+    return parsed;
   } catch {
+    // Fallback to cached history
+    if (_cachedData?.history?.length) {
+      return _cachedData.history;
+    }
     return null;
   }
 }

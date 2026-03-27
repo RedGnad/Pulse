@@ -15,7 +15,7 @@ import { fetchEcosystemData } from "@/lib/initia-registry";
 import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
 import { fetchL1Data } from "@/lib/l1-api";
 import { generateInsights } from "@/lib/ai";
-import { readOracleData } from "@/lib/oracle-reader";
+import { readOracleData, dumpCacheToFile } from "@/lib/oracle-reader";
 import { EcosystemOverview } from "@/lib/types";
 
 function healthToUint8(health: string): number {
@@ -122,6 +122,12 @@ export async function POST(req: Request) {
 
     const receipt = await tx.wait();
     const newCount = await oracle.snapshotCount();
+
+    // Re-read oracle data to update cache, then dump to file for cold-start persistence
+    try {
+      await readOracleData();
+      await dumpCacheToFile();
+    } catch { /* non-critical */ }
 
     return NextResponse.json({
       success: true,
