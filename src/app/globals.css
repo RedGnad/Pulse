@@ -126,6 +126,14 @@
   code, pre, .font-mono, table {
     font-family: var(--font-jetbrains), ui-monospace, monospace;
   }
+
+  .pulse-gradient-text {
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-size: 300% 300%;
+    animation: pulse-gradient 4s ease infinite;
+  }
 }
 
 /* ─── Scanline overlay (CRT monitor feel) ─────────────────────────────── */
@@ -179,6 +187,16 @@
 @keyframes ecg-scroll {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
+}
+@keyframes pulse-gradient {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes header-ping {
+  0%   { opacity: 0.6; transform: scale(1); }
+  50%  { opacity: 0; transform: scale(1.35); }
+  100% { opacity: 0; transform: scale(1.35); }
 }
 
 .animate-slide-up   { animation: slide-up 0.5s cubic-bezier(0.16,1,0.3,1) both; }

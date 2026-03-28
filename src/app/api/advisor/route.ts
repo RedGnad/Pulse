@@ -11,9 +11,10 @@ import { fetchL1Data } from "@/lib/l1-api";
 import { generateDeployAdvice, generateStakeAdvice, generateBridgeAdvice } from "@/lib/ai";
 import { AdvisorType } from "@/lib/types";
 import { readOracleHistory } from "@/lib/oracle-reader";
+import type { NetworkMode } from "@/lib/initia-client";
 
 export async function POST(req: Request) {
-  let body: { type: AdvisorType; params: Record<string, unknown> };
+  let body: { type: AdvisorType; params: Record<string, unknown>; network?: string };
   try {
     body = await req.json();
   } catch {
@@ -21,6 +22,7 @@ export async function POST(req: Request) {
   }
 
   const { type, params } = body;
+  const network = (body.network === "mainnet" ? "mainnet" : "testnet") as NetworkMode;
   if (!["deploy", "stake", "bridge"].includes(type)) {
     return NextResponse.json({ error: "Invalid advisor type" }, { status: 400 });
   }
@@ -29,7 +31,7 @@ export async function POST(req: Request) {
     // Fetch base ecosystem data + oracle history in parallel.
     // Oracle history is optional — graceful fallback to null if initia-pulse-1 is offline.
     const [[{ minitias, ibcChannels }, l1Raw], oracleHistory] = await Promise.all([
-      Promise.all([fetchEcosystemData(), fetchL1Data()]),
+      Promise.all([fetchEcosystemData(network), fetchL1Data(network)]),
       readOracleHistory(2500),
     ]);
 

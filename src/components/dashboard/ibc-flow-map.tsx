@@ -201,23 +201,60 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
         {connections.filter(c => c.isLive).map((conn, i) => {
           const isActive = conn.nodeId === activeNodeId;
           const isFocused = activeNodeId !== null;
-          const particleOpacity = isActive ? 0.8 : isFocused ? 0.05 : 0.35;
-          return [0, 1].map(pi => (
-            <circle key={`particle-${conn.nodeId}-${pi}`}
-              r={isActive ? 2.5 : 1.8}
-              fill={conn.color}
-              opacity={particleOpacity}
-              filter={isActive ? "url(#glow)" : undefined}
-              style={{ transition: "opacity 0.3s" }}
-            >
-              <animateMotion
-                dur={`${3 + i * 0.4}s`}
-                begin={`${pi * 1.5 + i * 0.2}s`}
-                repeatCount="indefinite"
-                path={conn.path}
-              />
-            </circle>
-          ));
+          const particleOpacity = isActive ? 0.8 : isFocused ? 0.04 : 0.45;
+          const particleCount = isActive ? 2 : 1;
+          return Array.from({ length: particleCount }, (_, pi) => {
+            const speed = 0.8 + (i * 0.08) + (pi * 0.15);
+            const size = isActive ? 2.8 : 2;
+            const delay = pi * (speed / particleCount) + i * 0.1;
+            return (
+              <g key={`particle-${conn.nodeId}-${pi}`}
+                opacity={particleOpacity}
+                style={{ transition: "opacity 0.3s" }}
+              >
+                {/* Glow halo */}
+                <circle
+                  r={size * 2}
+                  fill={conn.color}
+                  opacity={0.08}
+                >
+                  <animateMotion
+                    dur={`${speed}s`}
+                    begin={`${delay}s`}
+                    repeatCount="indefinite"
+                    path={conn.path}
+                  />
+                </circle>
+                {/* Trail */}
+                <ellipse
+                  rx={size * 2.5} ry={size * 0.5}
+                  fill={conn.color}
+                  opacity={0.18}
+                >
+                  <animateMotion
+                    dur={`${speed}s`}
+                    begin={`${delay}s`}
+                    repeatCount="indefinite"
+                    path={conn.path}
+                    rotate="auto"
+                  />
+                </ellipse>
+                {/* Main particle */}
+                <circle
+                  r={size}
+                  fill={conn.color}
+                  filter="url(#glow)"
+                >
+                  <animateMotion
+                    dur={`${speed}s`}
+                    begin={`${delay}s`}
+                    repeatCount="indefinite"
+                    path={conn.path}
+                  />
+                </circle>
+              </g>
+            );
+          });
         })}
 
         {/* L1 Center node */}

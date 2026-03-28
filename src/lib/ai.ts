@@ -253,12 +253,39 @@ Return JSON:
 Include 2 alternatives. If no live chains match well, say so in warnings.`;
 
   if (IS_MOCK) {
-    const top = live[0];
+    // Data-driven mock: rank chains by relevance to requirements
+    const scored = live.map(m => {
+      let score = 50;
+      const bridge = bridges.find(b => b.bridge_id === m.bridgeId);
+      if (m.metrics?.totalTxCount)   score += Math.min(20, Math.floor(m.metrics.totalTxCount / 10000));
+      if (m.metrics?.avgBlockTime && m.metrics.avgBlockTime < 2) score += 10;
+      if (requirements.needs.includes("oracle") && bridge?.config.oracle_enabled) score += 15;
+      if (requirements.needs.includes("ibc") && ibcChannels.some(c => c.sourceChainId === m.chainId)) score += 10;
+      if (requirements.needs.includes("celestia") && bridge?.batch_info?.chain_type === "CELESTIA") score += 15;
+      if (requirements.needs.includes("fast") && (m.metrics?.avgBlockTime ?? 99) < 2) score += 15;
+      if (requirements.needs.includes("evm") && (m.chainId.includes("evm") || m.chainId.includes("move"))) score += 15;
+      // Boost for higher block production
+      if (m.metrics?.blockHeight && m.metrics.blockHeight > 1000000) score += 5;
+      return { m, score: Math.min(score, 98) };
+    }).sort((a, b) => b.score - a.score);
+
+    const top = scored[0];
+    const alts = scored.slice(1, 3);
     return {
-      top_chain: { chainId: top?.chainId ?? "—", prettyName: top?.prettyName ?? "—", score: 78, reason: "Mock mode — set AI_MOCK=false for live analysis." },
-      alternatives: live.slice(1, 3).map(m => ({ chainId: m.chainId, prettyName: m.prettyName, score: 60, reason: "Mock." })),
-      rationale: "Mock mode active. Real analysis cross-references block time, IBC connectivity, oracle availability, and tx volume.",
-      warnings: ["AI_MOCK=true"],
+      top_chain: {
+        chainId: top?.m.chainId ?? "—",
+        prettyName: top?.m.prettyName ?? "—",
+        score: top?.score ?? 0,
+        reason: `Best match for ${requirements.appType} — ${top?.m.metrics?.totalTxCount ? formatNumber(top.m.metrics.totalTxCount) + " txs processed" : "active chain"}, ${top?.m.metrics?.avgBlockTime ? top.m.metrics.avgBlockTime.toFixed(1) + "s blocks" : "consistent block production"}.`,
+      },
+      alternatives: alts.map(a => ({
+        chainId: a.m.chainId,
+        prettyName: a.m.prettyName,
+        score: a.score,
+        reason: `${a.m.metrics?.activeValidators ? a.m.metrics.activeValidators + " validators" : "Active"}, ${a.m.metrics?.blockHeight ? formatNumber(a.m.metrics.blockHeight) + " blocks" : "live"}.`,
+      })),
+      rationale: `Ranked ${live.length} live minitias by tx volume, block time, and ${requirements.needs.length > 0 ? requirements.needs.join("/") + " support" : "general fitness"}. ${top?.m.prettyName} leads on the metrics that matter for ${requirements.appType}.`,
+      warnings: live.length < 3 ? ["Limited live chains available — consider waiting for more minitias to come online."] : [],
     };
   }
 
@@ -319,11 +346,41 @@ Return JSON:
 Provide exactly 3 recommendations.`;
 
   if (IS_MOCK) {
-    const top3 = validators.filter(v => !v.jailed).slice(0, 3);
+    // Data-driven mock: pick validators based on risk profile
+    const active = validators.filter(v => !v.jailed).sort((a, b) => parseInt(b.voting_power) - parseInt(a.voting_power));
+    const totalPwr = active.reduce((s, v) => s + parseInt(v.voting_power || "0"), 0);
+    let picks: typeof active;
+    let strategy: string;
+    if (riskProfile === "conservative") {
+      // Mid-range validators with low commission, skip top-3 for decentralization
+      picks = active.slice(3).filter(v => parseFloat(v.commission_rate || "0") < 0.1).slice(0, 3);
+      if (picks.length < 3) picks = active.slice(3, 6);
+      const top3Power = active.slice(0, 3).reduce((s, v) => s + parseInt(v.voting_power || "0"), 0);
+      strategy = `Split ${amount} INIT across ${picks.length} mid-tier validators to maximize decentralization. Avoiding top-3 validators who control ${totalPwr > 0 ? ((top3Power / totalPwr) * 100).toFixed(0) : "?"}% of voting power.`;
+    } else if (riskProfile === "aggressive") {
+      // Lowest commission validators
+      picks = [...active].sort((a, b) => parseFloat(a.commission_rate || "0") - parseFloat(b.commission_rate || "0")).slice(0, 3);
+      strategy = `Stake ${amount} INIT with lowest-commission validators for maximum yield. Accept concentration risk.`;
+    } else {
+      // Balanced: mix of top, mid, small
+      picks = [active[1], active[Math.floor(active.length / 3)], active[Math.floor(active.length * 2 / 3)]].filter(Boolean);
+      strategy = `Distribute ${amount} INIT across large, mid, and small validators for balanced risk/reward.`;
+    }
     return {
-      recommendations: top3.map((v, i) => ({ moniker: v.moniker, operator_address: v.operator_address, score: 80 - i * 5, rationale: "Mock mode.", risks: [] })),
-      strategy: "Mock mode — set AI_MOCK=false for real analysis.",
-      warnings: ["AI_MOCK=true"],
+      recommendations: picks.map((v, i) => {
+        const vp = parseInt(v.voting_power || "0");
+        const vpPct = totalPwr > 0 ? ((vp / totalPwr) * 100).toFixed(1) : "0";
+        const commission = (parseFloat(v.commission_rate || "0") * 100).toFixed(1);
+        return {
+          moniker: v.moniker,
+          operator_address: v.operator_address,
+          score: 85 - i * 8,
+          rationale: `${vpPct}% voting power, ${commission}% commission. ${riskProfile === "conservative" ? "Outside top-3 for decentralization." : riskProfile === "aggressive" ? "Low commission maximizes yield." : "Good balance of stake size and reliability."}`,
+          risks: parseFloat(v.commission_rate || "0") > 0.1 ? ["High commission rate"] : [],
+        };
+      }),
+      strategy,
+      warnings: active.length < 10 ? ["Limited validator set — monitor for concentration risks."] : [],
     };
   }
 
@@ -397,11 +454,38 @@ Return JSON:
 }`;
 
   if (IS_MOCK) {
+    // Data-driven mock: check if direct IBC channel exists
+    const directIbc = ibcChannels.find(c =>
+      c.portId === "transfer" &&
+      ((c.sourceChainId === params.fromChain && c.destChainId === params.toChain) ||
+       (c.sourceChainId === params.toChain && c.destChainId === params.fromChain))
+    );
+    const toBridge = bridges.find(b => {
+      const m = minitias.find(mi => mi.bridgeId === b.bridge_id);
+      return m?.chainId === params.toChain || m?.chainId === params.fromChain;
+    });
+    const finality = toBridge?.config.finalization_period ?? "7 days";
+
+    if (directIbc) {
+      return {
+        path: [params.fromChain, params.toChain],
+        total_time: "~10 seconds",
+        steps: [
+          { action: `IBC transfer ${params.token} via ${directIbc.channelId}`, time: "~10s", note: "Direct IBC channel available — fastest route." },
+        ],
+        rationale: `Direct IBC transfer channel exists between ${fromMinitia?.prettyName ?? params.fromChain} and ${toMinitia?.prettyName ?? params.toChain}. This is the fastest and cheapest route.`,
+      };
+    }
+    // Route via L1
+    const l1Id = params.fromChain.startsWith("init") ? params.fromChain : "initiation-2";
     return {
-      path: [params.fromChain, params.toChain],
-      total_time: "Mock mode",
-      steps: [{ action: `Bridge ${params.token}`, time: "—", note: "Set AI_MOCK=false for real analysis." }],
-      rationale: "Mock mode active.",
+      path: [params.fromChain, l1Id, params.toChain],
+      total_time: `Deposit: ~instant | Withdrawal: ${finality}`,
+      steps: [
+        { action: `Bridge ${params.token} from ${fromMinitia?.prettyName ?? params.fromChain} to L1`, time: toBridge ? "~instant (deposit direction)" : "~10s via IBC", note: "OPinit deposit or IBC transfer to L1." },
+        { action: `Bridge ${params.token} from L1 to ${toMinitia?.prettyName ?? params.toChain}`, time: "~instant (deposit direction)", note: `Withdrawal direction takes ${finality}. Oracle: ${toBridge?.config.oracle_enabled ? "enabled" : "N/A"}.` },
+      ],
+      rationale: `No direct channel between these chains. Routing via Initia L1 as hub. Deposit direction is near-instant; withdrawals subject to ${finality} finality window.`,
     };
   }
 

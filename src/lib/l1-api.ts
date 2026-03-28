@@ -1,15 +1,17 @@
 import { apiFetch, apiFetchSafe, L1_REST, L1_INDEX, getL1Urls, type NetworkMode } from "./initia-client";
 import { L1Block, L1Validator, OpinitBridge, Proposal, ProposalTally, ValidatorVote } from "./types";
 
-// ─── Blocks (indexer) ─────────────────────────────────────────────────────────
+// ─── Blocks (indexer, with REST fallback) ─────────────────────────────────────
 export async function fetchRecentBlocks(limit = 10, network?: NetworkMode): Promise<L1Block[]> {
-  const { index } = getL1Urls(network);
+  const { index, rest } = getL1Urls(network);
+
+  // Try indexer first
   const data = await apiFetchSafe<{ blocks: unknown[] }>(
     `${index}/indexer/block/v1/blocks?pagination.limit=${limit}&pagination.reverse=true`,
     { blocks: [] }
   );
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (data.blocks || []).map((b: any) => ({
+  const indexerBlocks = (data.blocks || []).map((b: any) => ({
     hash: b.hash ?? "",
     height: parseInt(b.height ?? "0", 10),
     timestamp: b.timestamp ?? "",
@@ -19,6 +21,39 @@ export async function fetchRecentBlocks(limit = 10, network?: NetworkMode): Prom
       operator_address: b.proposer?.operator_address ?? "",
     },
   }));
+
+  if (indexerBlocks.length > 0) return indexerBlocks;
+
+  // Fallback: fetch recent blocks from REST (one-by-one, limited batch)
+  const restLimit = Math.min(limit, 8);
+  const latest = await apiFetchSafe<{ block: { header: { height: string } } }>(
+    `${rest}/cosmos/base/tendermint/v1beta1/blocks/latest`,
+    { block: { header: { height: "0" } } }
+  );
+  const latestHeight = parseInt(latest.block?.header?.height ?? "0", 10);
+  if (latestHeight === 0) return [];
+
+  const heights = Array.from({ length: restLimit }, (_, i) => latestHeight - i);
+  const results = await Promise.allSettled(
+    heights.map(h =>
+      apiFetch<{ block_id: { hash: string }; block: { header: { height: string; time: string; proposer_address: string }; data: { txs: unknown[] } } }>(
+        `${rest}/cosmos/base/tendermint/v1beta1/blocks/${h}`, 5000
+      )
+    )
+  );
+
+  return results
+    .filter((r): r is PromiseFulfilledResult<{ block_id: { hash: string }; block: { header: { height: string; time: string; proposer_address: string }; data: { txs: unknown[] } } }> => r.status === "fulfilled")
+    .map(r => ({
+      hash: r.value.block_id?.hash ?? "",
+      height: parseInt(r.value.block.header.height, 10),
+      timestamp: r.value.block.header.time,
+      tx_count: r.value.block.data.txs?.length ?? 0,
+      proposer: {
+        moniker: r.value.block.header.proposer_address?.slice(0, 10) ?? "unknown",
+        operator_address: r.value.block.header.proposer_address ?? "",
+      },
+    }));
 }
 
 export async function fetchL1TxCount(network?: NetworkMode): Promise<number> {
@@ -194,14 +229,25 @@ export async function fetchInitSupply(): Promise<string> {
   return data.amount?.amount ?? "0";
 }
 
+// ─── Latest block tx count (REST — reliable, unlike indexer) ─────────────────
+export async function fetchLatestBlockTxCount(network?: NetworkMode): Promise<number> {
+  const { rest } = getL1Urls(network);
+  const data = await apiFetchSafe<{ block: { data: { txs: unknown[] } } }>(
+    `${rest}/cosmos/base/tendermint/v1beta1/blocks/latest`,
+    { block: { data: { txs: [] } } }
+  );
+  return data.block?.data?.txs?.length ?? 0;
+}
+
 // ─── Aggregate L1 data ────────────────────────────────────────────────────────
 export async function fetchL1Data(network?: NetworkMode) {
-  const [recentBlocks, txCount, blockHeight, validatorData, bridges] = await Promise.allSettled([
+  const [recentBlocks, txCount, blockHeight, validatorData, bridges, latestBlockTx] = await Promise.allSettled([
     fetchRecentBlocks(20, network),
     fetchL1TxCount(network),
     fetchL1BlockHeight(network),
     fetchValidators(network),
     fetchBridges(network),
+    fetchLatestBlockTxCount(network),
   ]);
 
   return {
@@ -211,5 +257,6 @@ export async function fetchL1Data(network?: NetworkMode) {
     validators:      validatorData.status === "fulfilled" ? validatorData.value.validators : [],
     totalValidators: validatorData.status === "fulfilled" ? validatorData.value.total : 0,
     bridges:         bridges.status === "fulfilled" ? bridges.value : [],
+    latestBlockTx:   latestBlockTx.status === "fulfilled" ? latestBlockTx.value : 0,
   };
 }

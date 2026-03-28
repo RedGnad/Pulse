@@ -88,11 +88,14 @@ export function DashboardContent() {
               color: "#E0F0FF", margin: 0, letterSpacing: "-0.03em", lineHeight: 1.1,
             }}>
               Ecosystem{" "}
-              <span style={{
-                background: "linear-gradient(135deg, #00FF88, #00D4FF)",
-                WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}>Pulse</span>
+              <span
+                className="pulse-gradient-text"
+                style={{
+                  backgroundImage: isMainnet
+                    ? "linear-gradient(135deg, #FFB800, #00D4FF, #FFB800, #00FF88, #FFB800)"
+                    : "linear-gradient(135deg, #00FF88, #00D4FF, #A78BFA, #00FF88)",
+                }}
+              >Pulse</span>
             </h1>
             {insights && (
               <span style={{
@@ -232,7 +235,7 @@ export function DashboardContent() {
           SECTION 4 — ECG HEARTBEAT (brand signature)
           ══════════════════════════════════════════════════════════════ */}
       <section className="animate-slide-up delay-200" style={{ marginBottom: 20 }}>
-        <EcgHeartbeat recentBlocks={data.l1.recentBlocks} height={110} />
+        <EcgHeartbeat recentBlocks={data.l1.recentBlocks} height={110} totalTxCount={data.l1.totalTxCount} blockHeight={data.l1.blockHeight} latestBlockTx={data.l1.latestBlockTx} />
       </section>
 
       {/* ══════════════════════════════════════════════════════════════

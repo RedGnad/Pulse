@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Header } from "@/components/header";
+import { useNetwork } from "@/contexts/network-context";
 import { DeployAdvice, StakeAdvice, BridgeAdvice, AdvisorType } from "@/lib/types";
 import {
   Loader2, ChevronRight, AlertTriangle, Rocket, Coins, ArrowLeftRight,
@@ -57,6 +58,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; desc: string }[] = 
 // ─── Deploy form + result ──────────────────────────────────────────────────────
 
 function DeployForm({ onResult }: { onResult: (a: DeployAdvice, grounded: boolean) => void }) {
+  const { network } = useNetwork();
   const [appType, setAppType]   = useState("General dApp");
   const [needs,   setNeeds]     = useState<string[]>([]);
   const [loading, setLoading]   = useState(false);
@@ -74,7 +76,7 @@ function DeployForm({ onResult }: { onResult: (a: DeployAdvice, grounded: boolea
       const res = await fetch("/api/advisor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "deploy", params: { appType, needs } }),
+        body: JSON.stringify({ type: "deploy", params: { appType, needs }, network }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed");
@@ -226,6 +228,7 @@ function DeployResult({ advice }: { advice: DeployAdvice }) {
 // ─── Stake form + result ───────────────────────────────────────────────────────
 
 function StakeForm({ onResult }: { onResult: (a: StakeAdvice, grounded: boolean) => void }) {
+  const { network } = useNetwork();
   const [amount,      setAmount]      = useState(1000);
   const [riskProfile, setRiskProfile] = useState<"conservative" | "balanced" | "aggressive">("balanced");
   const [loading,     setLoading]     = useState(false);
@@ -239,7 +242,7 @@ function StakeForm({ onResult }: { onResult: (a: StakeAdvice, grounded: boolean)
       const res = await fetch("/api/advisor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "stake", params: { amount, riskProfile } }),
+        body: JSON.stringify({ type: "stake", params: { amount, riskProfile }, network }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed");
@@ -406,9 +409,10 @@ const KNOWN_CHAINS = [
 ];
 
 function BridgeForm({ onResult }: { onResult: (a: BridgeAdvice, grounded: boolean) => void }) {
+  const { network } = useNetwork();
   const [token,     setToken]     = useState("INIT");
-  const [fromChain, setFromChain] = useState("initiation-2");
-  const [toChain,   setToChain]   = useState("minimove-1");
+  const [fromChain, setFromChain] = useState(network === "mainnet" ? "interwoven-1" : "initiation-2");
+  const [toChain,   setToChain]   = useState(network === "mainnet" ? "inertia-1" : "minimove-1");
   const [loading,   setLoading]   = useState(false);
   const [error,     setError]     = useState<string | null>(null);
 
@@ -424,7 +428,7 @@ function BridgeForm({ onResult }: { onResult: (a: BridgeAdvice, grounded: boolea
       const res = await fetch("/api/advisor", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "bridge", params: { token, fromChain, toChain } }),
+        body: JSON.stringify({ type: "bridge", params: { token, fromChain, toChain }, network }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed");

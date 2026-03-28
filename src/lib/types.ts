@@ -171,6 +171,7 @@ export interface EcosystemOverview {
     chainId: string;
     blockHeight: number;
     totalTxCount: number;
+    latestBlockTx?: number;
     recentBlocks: L1Block[];
     validators: L1Validator[];
     totalValidators: number;

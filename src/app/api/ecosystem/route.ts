@@ -38,6 +38,7 @@ export async function GET(req: Request) {
         chainId: l1ChainId,
         blockHeight: l1Data.blockHeight,
         totalTxCount: l1Data.txCount,
+        latestBlockTx: l1Data.latestBlockTx,
         recentBlocks: l1Data.recentBlocks,
         validators: l1Data.validators,
         totalValidators: l1Data.totalValidators,

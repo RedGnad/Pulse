@@ -131,25 +131,30 @@ export function Header() {
 
         {/* Brand */}
         <Link href="/" style={{ display: "flex", alignItems: "center", gap: 12, textDecoration: "none" }}>
-          {/* Logo mark — Mini ECG waveform */}
+          {/* Logo mark */}
           <div style={{
-            width: 32, height: 32, borderRadius: 6,
-            background: "rgba(0,255,136,0.06)",
-            border: "1px solid rgba(0,255,136,0.2)",
+            position: "relative",
+            width: 34, height: 34, borderRadius: 7,
+            background: "rgba(0,255,136,0.04)",
+            border: "1px solid rgba(0,255,136,0.12)",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0,
-            overflow: "hidden",
           }}>
-            <svg viewBox="0 0 32 20" width={24} height={14} fill="none">
+            <svg viewBox="0 0 28 18" width={22} height={14} fill="none" style={{ display: "block" }}>
+              {/* Static ECG trace — clean PQRST */}
               <polyline
-                points="0,10 6,10 8,10 10,3 12,17 14,6 16,10 20,10 22,8 24,12 26,10 32,10"
-                stroke="#00FF88" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-                fill="none"
-              >
-                <animate attributeName="stroke-dashoffset" from="60" to="0" dur="2s" repeatCount="indefinite" />
-                <animate attributeName="stroke-dasharray" values="0 60;60 0" dur="2s" repeatCount="indefinite" />
-              </polyline>
+                points="0,9 5,9 7,9 9,4 11,15 12.5,6 14,9 18,9 20,7.5 22,10.5 24,9 28,9"
+                stroke="#00FF88" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round"
+                opacity={0.65}
+              />
             </svg>
+            {/* Ping — radiating pulse on heartbeat rhythm */}
+            <span style={{
+              position: "absolute", inset: 0, borderRadius: 7,
+              border: "1px solid #00FF88",
+              animation: "header-ping 2.8s cubic-bezier(0, 0, 0.2, 1) infinite",
+              pointerEvents: "none",
+            }} />
           </div>
           <div>
             <div style={{

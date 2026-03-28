@@ -232,9 +232,11 @@ export default function AskPulsePage() {
               flex: 1,
               display: "flex",
               flexDirection: "column",
-              justifyContent: "center",
+              justifyContent: "flex-start",
               alignItems: "center",
-              paddingBottom: 80,
+              paddingTop: 40,
+              paddingBottom: 140,
+              overflowY: "auto",
               animation: "fade-in 0.6s ease-out",
             }}
           >

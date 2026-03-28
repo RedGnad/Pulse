@@ -46,9 +46,12 @@ function ecgWave(t: number, amplitude: number): number {
 interface EcgHeartbeatProps {
   recentBlocks: L1Block[];
   height?: number;
+  totalTxCount?: number;
+  blockHeight?: number;
+  latestBlockTx?: number;
 }
 
-export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) {
+export function EcgHeartbeat({ recentBlocks, height = 120, totalTxCount, blockHeight, latestBlockTx }: EcgHeartbeatProps) {
   const { isMainnet } = useNetwork();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -57,7 +60,15 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
 
   // Compute vital signs from real block data
   const vitals = useMemo(() => {
-    if (!recentBlocks.length) return { bpm: 0, avgTx: 0, latestHeight: 0, latestTx: 0 };
+    // Global average fallback — used when indexer blocks are empty or report tx_count=0
+    const globalAvgTxRaw = (totalTxCount && blockHeight && blockHeight > 0)
+      ? totalTxCount / blockHeight
+      : 0;
+
+    if (!recentBlocks.length) {
+      // Indexer returned no blocks (e.g. mainnet indexer timeout) — use REST data
+      return { bpm: 0, avgTx: globalAvgTxRaw, latestHeight: blockHeight ?? 0, latestTx: latestBlockTx ?? 0 };
+    }
 
     const sorted = [...recentBlocks].sort((a, b) =>
       new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
@@ -72,16 +83,20 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
       if (spanMinutes > 0) bpm = Math.round((sorted.length - 1) / spanMinutes);
     }
 
-    const avgTx = Math.round(sorted.reduce((s, b) => s + b.tx_count, 0) / sorted.length);
+    let avgTx = sorted.reduce((s, b) => s + b.tx_count, 0) / sorted.length;
     const latest = sorted[sorted.length - 1];
+
+    // Indexer often under-reports tx_count. If per-block avg is lower than global avg, use the global.
+    if (globalAvgTxRaw > avgTx) avgTx = globalAvgTxRaw;
 
     return {
       bpm,
       avgTx,
-      latestHeight: latest?.height ?? 0,
-      latestTx: latest?.tx_count ?? 0,
+      latestHeight: latest?.height ?? blockHeight ?? 0,
+      // Prefer REST-sourced latestBlockTx (reliable) over indexer tx_count (often 0)
+      latestTx: (latestBlockTx != null && latestBlockTx > 0) ? latestBlockTx : (latest?.tx_count ?? 0),
     };
-  }, [recentBlocks]);
+  }, [recentBlocks, totalTxCount, blockHeight]);
 
   // Build amplitude array from blocks (tx_count normalized)
   const amplitudes = useMemo(() => {
@@ -251,8 +266,8 @@ export function EcgHeartbeat({ recentBlocks, height = 120 }: EcgHeartbeatProps) 
           pointerEvents: "none",
         }}>
           <VitalReadout label="Latest Block" value={vitals.latestHeight != null && vitals.latestHeight > 0 ? vitals.latestHeight.toLocaleString() : "—"} color="#00D4FF" />
-          <VitalReadout label="Avg Tx / Block" value={vitals.avgTx != null ? String(vitals.avgTx) : "—"} color="#FFB800" hint={vitals.avgTx === 0 && !isMainnet ? "testnet" : undefined} />
-          <VitalReadout label="Last Block Txs" value={vitals.latestTx != null ? String(vitals.latestTx) : "—"} color="#A78BFA" hint={vitals.latestTx === 0 && !isMainnet ? "testnet" : undefined} />
+          <VitalReadout label="Avg Tx / Block" value={vitals.avgTx != null ? (vitals.avgTx < 1 && vitals.avgTx > 0 ? vitals.avgTx.toFixed(2) : String(Math.round(vitals.avgTx))) : "—"} color="#FFB800" hint={vitals.avgTx === 0 && !isMainnet ? "testnet" : undefined} />
+          <VitalReadout label="Last Block Txs" value={vitals.latestTx != null ? String(vitals.latestTx) : "—"} color="#A78BFA" />
         </div>
 
         {/* Bottom status bar */}
