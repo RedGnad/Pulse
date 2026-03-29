@@ -1,9 +1,9 @@
 {
   "project_name": "Initia Pulse",
   "repo_url": "https://github.com/RedGnad/Pulse",
-  "commit_sha": "8fc6b1ef3c1879fe1cd982ae4a51fa19f58ab714",
+  "commit_sha": "f0f3c9897e6dcaa787f38aaf47f2939c04df15fc",
   "rollup_chain_id": "initia-pulse-1",
-  "deployed_address": "0xB7C25af401137597C896685Fc195e0143c54de7A",
+  "deployed_address": "0xc09F200B0d98ca2b21761aFA191FEdb55a9AA4B4",
   "vm": "evm",
   "native_feature": "interwoven-bridge",
   "core_logic_path": "contracts/PulseOracle.sol",
