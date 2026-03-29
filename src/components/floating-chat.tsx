@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Loader2, MessageSquare, X, Sparkles, ArrowLeftRight } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
+import { useNetwork } from "@/contexts/network-context";
 
 interface ChatMsg { role: "user" | "assistant"; content: string }
 
@@ -21,6 +22,7 @@ export function FloatingChat() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { openBridge } = useInterwovenKit();
+  const { network } = useNetwork();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -41,7 +43,7 @@ export function FloatingChat() {
       const res = await fetch("/api/insights/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, history: chat }),
+        body: JSON.stringify({ message: text, history: chat, network }),
       });
       const json = await res.json();
       const response = json.response || json.error;

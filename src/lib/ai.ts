@@ -53,8 +53,18 @@ const MOCK_INSIGHTS: EcosystemInsights = {
   generated_at: new Date().toISOString(),
 };
 
-const MOCK_CHAT_REPLY =
-  "AI analysis is in mock mode. Set AI_MOCK=false in .env.local to enable live responses.";
+function mockChatReply(data?: EcosystemOverview): string {
+  if (!data) return "No ecosystem data available. Try again in a moment.";
+  const live = data.minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0 && !m.isMainnetRef);
+  const top = live.sort((a, b) => (b.metrics?.totalTxCount ?? 0) - (a.metrics?.totalTxCount ?? 0)).slice(0, 3);
+  const chainList = top.map(m => `**${m.prettyName}** (${(m.metrics?.totalTxCount ?? 0).toLocaleString()} txs, block ${(m.metrics?.blockHeight ?? 0).toLocaleString()})`).join(", ");
+  const network = data.l1.chainId.includes("interwoven") ? "mainnet" : "testnet";
+  return `**Ecosystem Report — ${network.toUpperCase()}**\n\n`
+    + `The Initia ${network} is running with **${live.length} active rollups** and **${data.totalIbcChannels} IBC channels**. `
+    + `L1 is at block **${data.l1.blockHeight.toLocaleString()}** with **${data.l1.totalValidators} validators** and **${data.l1.totalTxCount.toLocaleString()}** total transactions.\n\n`
+    + `**Most active chains:** ${chainList || "No active chains detected"}.\n\n`
+    + `All chains are producing blocks and cross-rollup communication via IBC is operational.`;
+}
 
 function buildEcosystemContext(data: EcosystemOverview): string {
   // Exclude mainnet reference chains from AI analysis — they're visual-only
@@ -508,7 +518,7 @@ export async function chatWithEcosystem(
   data: EcosystemOverview,
   fullMode = false
 ): Promise<string> {
-  if (IS_MOCK) return MOCK_CHAT_REPLY;
+  if (IS_MOCK) return mockChatReply(data);
 
   const context = buildEcosystemContext(data);
 

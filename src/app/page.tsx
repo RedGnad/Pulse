@@ -1,10 +1,8 @@
-import { Header } from "@/components/header";
 import { DashboardContent } from "@/components/dashboard/dashboard-content";
 
 export default function Home() {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Header />
       <main style={{ position: "relative", zIndex: 10, maxWidth: 1280, margin: "0 auto", width: "100%", flex: 1, padding: "clamp(16px, 4vw, 32px) clamp(12px, 3vw, 28px) 48px" }}>
         <DashboardContent />
       </main>

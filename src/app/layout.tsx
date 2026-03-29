@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Syne, DM_Mono } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { Header } from "@/components/header";
 import { FloatingChat } from "@/components/floating-chat";
 import "./globals.css";
 
@@ -36,6 +37,7 @@ export default function RootLayout({
       >
         <div className="noise-overlay" />
         <Providers>
+          <Header />
           {children}
           <FloatingChat />
         </Providers>

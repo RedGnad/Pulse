@@ -4,7 +4,6 @@ import { use } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEcosystem } from "@/hooks/use-ecosystem";
-import { Header } from "@/components/header";
 import { ArrowLeft, ExternalLink, Loader2, AlertTriangle } from "lucide-react";
 import { formatNumber, formatTokenAmount, timeAgo } from "@/lib/format";
 
@@ -61,7 +60,7 @@ export default function MinitiaDetailPage({ params }: PageProps) {
   if (isLoading) {
     return (
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        <Header />
+
         <main style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center" }}>
           <Loader2 style={{ width: 24, height: 24, color: "#00D4FF" }} className="animate-spin" />
         </main>
@@ -72,7 +71,7 @@ export default function MinitiaDetailPage({ params }: PageProps) {
   if (error || !data) {
     return (
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        <Header />
+
         <main style={{ display: "flex", flex: 1, alignItems: "center", justifyContent: "center", gap: 12 }}>
           <AlertTriangle style={{ width: 20, height: 20, color: "#F0A000" }} />
           <span style={{ fontFamily: "var(--font-jetbrains), monospace", fontSize: 12, color: "#F0A000" }}>Failed to load data.</span>
@@ -92,7 +91,7 @@ export default function MinitiaDetailPage({ params }: PageProps) {
   if (!minitia) {
     return (
       <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-        <Header />
+
         <main style={{ display: "flex", flex: 1, flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
           <span style={{ fontFamily: "var(--font-jetbrains), monospace", fontSize: 12, color: "#8AAABB" }}>
             Chain <code style={{ color: "#E8F0F4" }}>{chainId}</code> not found.
@@ -113,7 +112,6 @@ export default function MinitiaDetailPage({ params }: PageProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Header />
       <main style={{ maxWidth: 1024, margin: "0 auto", width: "100%", flex: 1, padding: "24px 24px" }}>
 
         {/* Back */}

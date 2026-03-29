@@ -241,7 +241,7 @@ function NavLink({ href, active, highlight, glow, step, children }: {
       display: "inline-flex", alignItems: "center", gap: 5,
       padding: "6px 12px",
       fontFamily: "var(--font-chakra), sans-serif",
-      fontSize: 13, fontWeight: active ? 600 : 400,
+      fontSize: 13, fontWeight: 500,
       textDecoration: "none",
       color: active
         ? "#E0F0FF"

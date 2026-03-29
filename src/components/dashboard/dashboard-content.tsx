@@ -92,8 +92,8 @@ export function DashboardContent() {
                 className="pulse-gradient-text"
                 style={{
                   backgroundImage: isMainnet
-                    ? "linear-gradient(135deg, #FFB800, #00D4FF, #FFB800, #00FF88, #FFB800)"
-                    : "linear-gradient(135deg, #00FF88, #00D4FF, #A78BFA, #00FF88)",
+                    ? "linear-gradient(90deg, #FFB800, #00D4FF, #FFB800, #00FF88, #FFB800)"
+                    : "linear-gradient(90deg, #00FF88, #00D4FF, #A78BFA, #00FF88)",
                 }}
               >Pulse</span>
             </h1>

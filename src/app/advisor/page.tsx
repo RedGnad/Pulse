@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Header } from "@/components/header";
 import { useNetwork } from "@/contexts/network-context";
 import { DeployAdvice, StakeAdvice, BridgeAdvice, AdvisorType } from "@/lib/types";
 import {
@@ -594,7 +593,6 @@ export default function AdvisorPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <Header />
       <main className="relative z-10 mx-auto w-full max-w-7xl flex-1 px-4 py-7 sm:px-6">
 
         {/* ── Page header ───────────────────────────────────────────────── */}

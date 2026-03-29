@@ -1,13 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { fetchEcosystemData } from "@/lib/initia-registry";
 import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
 import { fetchL1Data } from "@/lib/l1-api";
 import { generateInsights } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
+import type { NetworkMode } from "@/contexts/network-context";
 
 export const revalidate = 300;
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === "your_api_key_here") {
     return NextResponse.json(
       { error: "ANTHROPIC_API_KEY not configured. Add it to .env.local" },
@@ -15,10 +16,12 @@ export async function GET() {
     );
   }
 
+  const network = (req.nextUrl.searchParams.get("network") ?? "testnet") as NetworkMode;
+
   try {
     const [{ minitias, ibcChannels }, l1Raw] = await Promise.all([
-      fetchEcosystemData(),
-      fetchL1Data(),
+      fetchEcosystemData(network),
+      fetchL1Data(network),
     ]);
     const minitiasWith = await fetchAllMinitiaMetrics(minitias);
 
@@ -29,7 +32,7 @@ export async function GET() {
       ibcChannels,
       bridges: l1Raw.bridges,
       l1: {
-        chainId: "initiation-2",
+        chainId: network === "mainnet" ? "interwoven-1" : "initiation-2",
         blockHeight: l1Raw.blockHeight,
         totalTxCount: l1Raw.txCount,
         recentBlocks: l1Raw.recentBlocks,

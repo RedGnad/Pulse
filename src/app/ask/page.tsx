@@ -14,8 +14,8 @@ import {
 } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
 import { useEcosystem } from "@/hooks/use-ecosystem";
+import { useNetwork } from "@/contexts/network-context";
 import { scoreColor } from "@/lib/pulse-score";
-import { Header } from "@/components/header";
 
 interface ChatMsg {
   role: "user" | "assistant";
@@ -119,6 +119,7 @@ export default function AskPulsePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { openBridge } = useInterwovenKit();
   const { data: ecosystem } = useEcosystem();
+  const { network } = useNetwork();
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -149,6 +150,7 @@ export default function AskPulsePage() {
             message: text,
             history: chat.map((m) => ({ role: m.role, content: m.content })),
             mode: "full",
+            network,
           }),
         });
         const json = await res.json();
@@ -170,7 +172,7 @@ export default function AskPulsePage() {
         setLoading(false);
       }
     },
-    [chat, input, loading]
+    [chat, input, loading, network]
   );
 
   function handleBridge() {
@@ -185,8 +187,6 @@ export default function AskPulsePage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
-      <Header />
-
       <div
         style={{
           flex: 1,

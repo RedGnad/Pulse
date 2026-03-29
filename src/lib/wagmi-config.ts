@@ -1,4 +1,4 @@
-import { createConfig, CreateConnectorFn, http, injected } from "wagmi";
+import { createConfig, CreateConnectorFn, http } from "wagmi";
 import { defineChain } from "viem";
 
 /* ── Initia L1 (testnet) ── */
@@ -31,11 +31,11 @@ const transports = {
 
 /* ── Build connector list — privy loaded at call-time to avoid module-level fetch crash ── */
 function buildConnectors(): CreateConnectorFn[] {
-  const list: CreateConnectorFn[] = [injected()];
+  const list: CreateConnectorFn[] = [];
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const privy = require("@initia/interwovenkit-react").initiaPrivyWalletConnector;
-    if (privy) list.unshift(privy as CreateConnectorFn);
+    if (privy) list.push(privy as CreateConnectorFn);
   } catch {
     // InterwovenKit unavailable or network down — proceed without it
   }
@@ -55,7 +55,7 @@ try {
 } catch {
   wagmiConfig = createConfig({
     chains: [initiaTestnet, initiaPulse],
-    connectors: [injected()],
+    connectors: [],
     multiInjectedProviderDiscovery: true,
     transports,
     ssr: true,

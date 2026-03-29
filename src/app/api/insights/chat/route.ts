@@ -5,6 +5,7 @@ import { fetchL1Data } from "@/lib/l1-api";
 import { chatWithEcosystem } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
+import type { NetworkMode } from "@/contexts/network-context";
 
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === "your_api_key_here") {
@@ -12,12 +13,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { message, history = [], mode = "widget" } = await req.json();
+    const { message, history = [], mode = "widget", network: networkParam } = await req.json();
     if (!message?.trim()) return NextResponse.json({ error: "Empty message" }, { status: 400 });
 
+    const network = (networkParam ?? "testnet") as NetworkMode;
+
     const [{ minitias, ibcChannels }, l1Raw] = await Promise.all([
-      fetchEcosystemData(),
-      fetchL1Data(),
+      fetchEcosystemData(network),
+      fetchL1Data(network),
     ]);
     const minitiasWith = await fetchAllMinitiaMetrics(minitias);
 
@@ -34,7 +37,7 @@ export async function POST(req: NextRequest) {
       ibcChannels,
       bridges: l1Raw.bridges,
       l1: {
-        chainId: "initiation-2",
+        chainId: network === "mainnet" ? "interwoven-1" : "initiation-2",
         blockHeight: l1Raw.blockHeight,
         totalTxCount: l1Raw.txCount,
         recentBlocks: l1Raw.recentBlocks,

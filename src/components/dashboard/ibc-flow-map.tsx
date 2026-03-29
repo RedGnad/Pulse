@@ -176,7 +176,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
         ))}
 
         {/* Connection lines (curved bezier) */}
-        {connections.map(conn => {
+        {connections.map((conn, ci) => {
           const isActive = conn.nodeId === activeNodeId;
           const isFocused = activeNodeId !== null;
           const opacity = isActive ? 0.5
@@ -185,71 +185,104 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
           const strokeW = isActive ? 2 : conn.isLive ? (0.8 + conn.channelCount * 0.3) : 0.5;
 
           return (
-            <path key={`conn-${conn.nodeId}`}
+            <path key={`conn-${conn.nodeId}-${n}`}
               d={conn.path}
               fill="none"
               stroke={conn.color}
               strokeWidth={Math.min(strokeW, 3)}
               strokeOpacity={opacity}
               strokeDasharray={conn.isLive ? "none" : "4 8"}
-              style={{ transition: "stroke-opacity 0.3s, stroke-width 0.3s" }}
+              style={{
+                transition: "stroke-opacity 0.3s, stroke-width 0.3s",
+                animation: `ibc-node-enter 0.6s ease-out ${ci * 0.08}s both`,
+              }}
             />
           );
         })}
 
-        {/* Animated flow particles on live connections */}
+        {/* Animated flow particles — fast + low cadence via keyPoints */}
         {connections.filter(c => c.isLive).map((conn, i) => {
           const isActive = conn.nodeId === activeNodeId;
           const isFocused = activeNodeId !== null;
-          const particleOpacity = isActive ? 0.8 : isFocused ? 0.04 : 0.45;
+          const groupOpacity = isActive ? 0.85 : isFocused ? 0.04 : 0.55;
           const particleCount = isActive ? 2 : 1;
           return Array.from({ length: particleCount }, (_, pi) => {
-            const speed = 0.8 + (i * 0.08) + (pi * 0.15);
-            const size = isActive ? 2.8 : 2;
-            const delay = pi * (speed / particleCount) + i * 0.1;
+            const dur = 1.8 + (i * 0.12) + (pi * 0.25);
+            const size = isActive ? 3 : 2.2;
+            const delay = pi * (dur / particleCount) + i * 0.3;
             return (
               <g key={`particle-${conn.nodeId}-${pi}`}
-                opacity={particleOpacity}
                 style={{ transition: "opacity 0.3s" }}
               >
-                {/* Glow halo */}
-                <circle
-                  r={size * 2}
-                  fill={conn.color}
-                  opacity={0.08}
-                >
-                  <animateMotion
-                    dur={`${speed}s`}
-                    begin={`${delay}s`}
-                    repeatCount="indefinite"
-                    path={conn.path}
-                  />
-                </circle>
-                {/* Trail */}
+                {/* Comet trail — single elongated ellipse, auto-rotates along curve */}
                 <ellipse
-                  rx={size * 2.5} ry={size * 0.5}
+                  rx={size * 6} ry={size * 0.7}
                   fill={conn.color}
-                  opacity={0.18}
+                  opacity={groupOpacity * 0.25}
                 >
                   <animateMotion
-                    dur={`${speed}s`}
-                    begin={`${delay}s`}
-                    repeatCount="indefinite"
-                    path={conn.path}
+                    dur={`${dur}s`} begin={`${delay}s`}
+                    repeatCount="indefinite" path={conn.path}
+                    keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
                     rotate="auto"
                   />
+                  <animate attributeName="opacity"
+                    values={`0;${groupOpacity * 0.25};${groupOpacity * 0.25};0;0`}
+                    keyTimes="0;0.01;0.18;0.21;1"
+                    dur={`${dur}s`} begin={`${delay}s`}
+                    repeatCount="indefinite"
+                  />
                 </ellipse>
-                {/* Main particle */}
+                {/* Glow halo — soft circle around head */}
+                <circle
+                  r={size * 2.2}
+                  fill={conn.color}
+                  opacity={groupOpacity * 0.15}
+                >
+                  <animateMotion
+                    dur={`${dur}s`} begin={`${delay}s`}
+                    repeatCount="indefinite" path={conn.path}
+                    keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
+                  />
+                  <animate attributeName="opacity"
+                    values={`0;${groupOpacity * 0.15};${groupOpacity * 0.15};0;0`}
+                    keyTimes="0;0.01;0.18;0.21;1"
+                    dur={`${dur}s`} begin={`${delay}s`}
+                    repeatCount="indefinite"
+                  />
+                </circle>
+                {/* Coloured body */}
                 <circle
                   r={size}
                   fill={conn.color}
-                  filter="url(#glow)"
                 >
                   <animateMotion
-                    dur={`${speed}s`}
-                    begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${delay}s`}
+                    repeatCount="indefinite" path={conn.path}
+                    keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
+                  />
+                  <animate attributeName="opacity"
+                    values={`0;${groupOpacity * 0.75};${groupOpacity * 0.75};0;0`}
+                    keyTimes="0;0.01;0.18;0.21;1"
+                    dur={`${dur}s`} begin={`${delay}s`}
                     repeatCount="indefinite"
-                    path={conn.path}
+                  />
+                </circle>
+                {/* White core */}
+                <circle
+                  r={size * 0.4}
+                  fill="white"
+                >
+                  <animateMotion
+                    dur={`${dur}s`} begin={`${delay}s`}
+                    repeatCount="indefinite" path={conn.path}
+                    keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
+                  />
+                  <animate attributeName="opacity"
+                    values={`0;${groupOpacity * 0.9};${groupOpacity * 0.9};0;0`}
+                    keyTimes="0;0.01;0.18;0.21;1"
+                    dur={`${dur}s`} begin={`${delay}s`}
+                    repeatCount="indefinite"
                   />
                 </circle>
               </g>
@@ -296,9 +329,14 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
             : (node.isLive ? 0.85 : 0.3);
           const nodeR = active ? node.r + 4 : node.r;
 
+          const idx = nodePositions.indexOf(node);
           return (
-            <g key={node.id}
-              style={{ cursor: "pointer", transition: "opacity 0.3s" }}
+            <g key={`${node.id}-${n}`}
+              style={{
+                cursor: "pointer",
+                transition: "opacity 0.3s",
+                animation: `ibc-node-enter 0.6s ease-out ${idx * 0.08}s both`,
+              }}
               opacity={nodeOpacity}
               onClick={() => onSelect?.(node.id)}
               onMouseEnter={() => setHoveredNode(node.id)}
