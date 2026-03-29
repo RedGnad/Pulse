@@ -10,7 +10,7 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 
 ### Implementation Detail
 
-- **The Custom Implementation**: PulseOracle is a Solidity contract deployed on a dedicated MiniEVM rollup (`initia-pulse-1`). Every 5 minutes, an AI agent analyzes live data from 13+ minitias, 19 validators, and all IBC channels, then writes a compressed ecosystem snapshot on-chain (block height, active rollups, tx count, health score, and a natural-language brief). The frontend provides real-time dashboards, an AI advisor for deploy/stake/bridge decisions, and a full oracle history explorer.
+- **The Custom Implementation**: PulseOracle is a composable Solidity contract deployed on a dedicated MiniEVM rollup (`initia-pulse-1`). Every 5 minutes, an AI agent analyzes live data from 13+ minitias, 19 validators, and all IBC channels, then writes a compressed ecosystem snapshot on-chain — including a `dataHash` (keccak256 commitment) for integrity verification. The contract exposes DeFi-composable primitives: `isHealthy(minHealth, minStreak)` lets any lending protocol gate operations on ecosystem stability, `healthStreak()` enables risk scoring, and a multi-writer role system (`setWriter`) allows multiple AI agents to contribute. The frontend provides real-time dashboards, an AI advisor for deploy/stake/bridge decisions, and a full oracle history explorer.
 
 - **The Native Feature**: The Interwoven Bridge is integrated via InterwovenKit's `openBridge` hook, allowing users to bridge INIT tokens from L1 (initiation-2) directly to the Pulse rollup. The bridge is accessible from 5 entry points: the bridge widget, Ask Pulse chat (contextual), floating chat, wallet portfolio, and chain detail panel.
 
@@ -49,7 +49,8 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
                │ ethers.js
 ┌──────────────▼──────────────────────────────┐
 │  PulseOracle.sol (MiniEVM rollup)           │
-│  writeSnapshot() · latest() · getHistory()  │
+│  writeSnapshot · isHealthy · healthStreak   │
+│  latest · getSnapshot · getHistory[50]      │
 │  Chain: initia-pulse-1 · Bridge ID: 1691    │
 └─────────────────────────────────────────────┘
 ```

@@ -1,7 +1,9 @@
 /**
  * POST /api/oracle
  * Writes the current ecosystem snapshot to PulseOracle on initia-pulse-1.
- * Called by a cron job every 5 minutes (or manually via admin).
+ * Called by Vercel cron every 5 minutes (or manually via admin).
+ * Note: Vercel Hobby plan limits cron to 1/day — upgrade to Pro for 5-min intervals.
+ * Local dev: use scripts/oracle-cron.mjs for true 5-min scheduling.
  *
  * Auth: If ORACLE_SECRET is set, the x-oracle-secret header must match.
  * If ORACLE_SECRET is not set (local dev), writes are allowed without auth.
@@ -94,6 +96,11 @@ export async function POST(req: Request) {
     // 4. Write to PulseOracle via ethers.js
     const { ethers } = await import("ethers");
 
+    // Compute data hash for on-chain integrity verification
+    const dataHash = ethers.keccak256(ethers.toUtf8Bytes(
+      JSON.stringify({ blockHeight, activeMinitias, ibcCount, totalValidators, totalTxCount, brief })
+    ));
+
     const network = ethers.Network.from(Number(chainId));
     const provider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
 
@@ -103,7 +110,7 @@ export async function POST(req: Request) {
     );
 
     const abi = [
-      "function writeSnapshot(uint32 _blockHeight, uint32 _activeMinitias, uint32 _ibcChannels, uint32 _totalValidators, uint32 _activeProposals, uint64 _totalTxCount, uint8 _ecosystemHealth, string calldata _brief) external",
+      "function writeSnapshot(uint32 _blockHeight, uint32 _activeMinitias, uint32 _ibcChannels, uint32 _totalValidators, uint32 _activeProposals, uint64 _totalTxCount, uint8 _ecosystemHealth, bytes32 _dataHash, string calldata _brief) external",
       "function snapshotCount() view returns (uint256)",
     ];
 
@@ -117,6 +124,7 @@ export async function POST(req: Request) {
       activeProposals,
       totalTxCount,
       healthUint,
+      dataHash,
       brief,
       { gasPrice: 0 }
     );

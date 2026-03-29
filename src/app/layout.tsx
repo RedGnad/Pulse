@@ -1,21 +1,22 @@
 import type { Metadata } from "next";
-import { Syne, DM_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import { Header } from "@/components/header";
 import { FloatingChat } from "@/components/floating-chat";
 import "./globals.css";
 
-const syne = Syne({
-  weight: ["400", "500", "600", "700", "800"],
+const syne = localFont({
+  src: "../fonts/Syne-Variable.woff2",
   variable: "--font-chakra",
-  subsets: ["latin"],
   display: "swap",
 });
 
-const dmMono = DM_Mono({
-  weight: ["400", "500"],
+const dmMono = localFont({
+  src: [
+    { path: "../fonts/DMMono-Regular.woff2", weight: "400" },
+    { path: "../fonts/DMMono-Medium.woff2", weight: "500" },
+  ],
   variable: "--font-jetbrains",
-  subsets: ["latin"],
   display: "swap",
 });
 

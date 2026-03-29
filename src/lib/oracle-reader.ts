@@ -35,7 +35,7 @@ type RawSnap = {
 const HISTORY_ABI = [
   "function snapshotCount() view returns (uint256)",
   "function healthLabel() view returns (string)",
-  "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, string brief)[10])",
+  "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, bytes32 dataHash, string brief)[50])",
 ];
 
 function parseRaw(raw: RawSnap[]): OracleHistoryEntry[] {

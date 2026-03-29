@@ -452,28 +452,43 @@ function CodeExamples({ oracleAddr }: { oracleAddr: string }) {
                 }}
               >{`interface IPulseOracle {
   struct Snapshot {
-    uint32 blockHeight;
-    uint32 activeMinitias;
-    uint32 ibcChannels;
-    uint32 totalValidators;
-    uint64 totalTxCount;
-    uint8  ecosystemHealth;
-    string brief;
     uint256 timestamp;
+    uint32  blockHeight;
+    uint32  activeMinitias;
+    uint32  ibcChannels;
+    uint32  totalValidators;
+    uint32  activeProposals;
+    uint64  totalTxCount;
+    uint8   ecosystemHealth;
+    bytes32 dataHash;  // integrity proof
+    string  brief;
   }
   function latest()
     external view returns (Snapshot memory);
+  function getSnapshot(uint256 index)
+    external view returns (Snapshot memory);
   function getHistory()
-    external view returns (Snapshot[] memory);
+    external view returns (Snapshot[50] memory);
+  function healthStreak(uint8 minHealth)
+    external view returns (uint256);
+  function isHealthy(uint8 minHealth, uint256 minStreak)
+    external view returns (bool);
+  function healthLabel()
+    external view returns (string memory);
+  function isWriter(address)
+    external view returns (bool);
 }
 
-// Usage in your contract:
+// Usage — DeFi health gate:
 IPulseOracle oracle = IPulseOracle(
   ${oracleAddr}
 );
-IPulseOracle.Snapshot memory s = oracle.latest();
-require(s.ecosystemHealth >= 2,
-  "ecosystem not healthy enough");`}</pre>
+require(oracle.isHealthy(2, 10),
+  "ecosystem unstable — lending paused");
+
+// Verify data integrity off-chain:
+bytes32 expected = keccak256(abi.encodePacked(rawData));
+require(s.dataHash == expected, "data tampered");`}</pre>
             </div>
 
             <div
