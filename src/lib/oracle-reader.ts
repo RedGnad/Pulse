@@ -158,7 +158,7 @@ export async function readOracleHistory(timeoutMs = 2500): Promise<OracleHistory
     const provider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
 
     const abi = [
-      "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, string brief)[10])",
+      "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, bytes32 dataHash, string brief)[50])",
     ];
     const oracle = new ethers.Contract(oracleAddr, abi, provider);
 

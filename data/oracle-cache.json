@@ -1,16 +1,26 @@
 {
-  "snapshotCount": "6",
+  "snapshotCount": "7",
   "latest": {
-    "timestamp": "1774827850",
-    "blockHeight": 21399758,
+    "timestamp": "1774912643",
+    "blockHeight": 21438238,
     "activeMinitilas": 6,
     "ibcChannels": 4,
     "totalValidators": 11,
-    "totalTxCount": 25132500,
+    "totalTxCount": 25175211,
     "ecosystemHealth": "growing",
-    "brief": "The Initia ecosystem is running normally across its interconnected rollup network. Multiple minitias are processing transactions and producing blocks at consistent rates. Cross-rollup IBC channels remain active."
+    "brief": "Initia testnet ecosystem operating at full capacity with 6 active minitias processing 29.79M cumulative transactions. Three mature rollups (EVM, Move, Wasm) maintain parity at ~15.2M blocks with consistent 682s block times, while Strat and Inertia show divergent throughput patterns. Initia Pulse appears dormant, requiring investigation."
   },
   "history": [
+    {
+      "timestamp": "1774912643",
+      "blockHeight": 21438238,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25175211,
+      "ecosystemHealth": "growing",
+      "brief": "Initia testnet ecosystem operating at full capacity with 6 active minitias processing 29.79M cumulative transactions. Three mature rollups (EVM, Move, Wasm) maintain parity at ~15.2M blocks with consistent 682s block times, while Strat and Inertia show divergent throughput patterns. Initia Pulse appears dormant, requiring investigation."
+    },
     {
       "timestamp": "1774827850",
       "blockHeight": 21399758,

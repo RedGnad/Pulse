@@ -862,6 +862,8 @@ export default function OraclePage() {
         setLastTx(json.txHash);
         refetch();
       } else setWriteError(json.error ?? "Write failed");
+    } catch (err) {
+      setWriteError(err instanceof Error ? err.message : "Write failed — check console");
     } finally {
       setWriting(false);
     }

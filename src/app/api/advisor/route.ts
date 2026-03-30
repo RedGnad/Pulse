@@ -13,6 +13,9 @@ import { AdvisorType } from "@/lib/types";
 import { readOracleHistory } from "@/lib/oracle-reader";
 import type { NetworkMode } from "@/lib/initia-client";
 
+// Hard cap: abort the entire handler after 30s so the client always gets a response
+const ROUTE_TIMEOUT_MS = 30_000;
+
 export async function POST(req: Request) {
   let body: { type: AdvisorType; params: Record<string, unknown>; network?: string };
   try {
@@ -27,21 +30,41 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid advisor type" }, { status: 400 });
   }
 
+  // Wrap entire logic in a race against a timeout
+  const result = await Promise.race([
+    handleAdvisor(type, params, network),
+    new Promise<NextResponse>((resolve) =>
+      setTimeout(() => resolve(NextResponse.json({ error: "Advisor timed out — try again" }, { status: 504 })), ROUTE_TIMEOUT_MS)
+    ),
+  ]);
+  return result;
+}
+
+async function handleAdvisor(
+  type: AdvisorType,
+  params: Record<string, unknown>,
+  network: NetworkMode,
+): Promise<NextResponse> {
   try {
-    // Fetch base ecosystem data + oracle history in parallel.
-    // Oracle history is optional — graceful fallback to null if initia-pulse-1 is offline.
+    console.log("[advisor] START", type, network);
+    console.time("[advisor] fetchData");
     const [[{ minitias, ibcChannels }, l1Raw], oracleHistory] = await Promise.all([
       Promise.all([fetchEcosystemData(network), fetchL1Data(network)]),
       readOracleHistory(2500),
     ]);
+    console.timeEnd("[advisor] fetchData");
 
     if (type === "deploy") {
+      console.time("[advisor] fetchMinitiaMetrics");
       const minitiasWith = await fetchAllMinitiaMetrics(minitias);
+      console.timeEnd("[advisor] fetchMinitiaMetrics");
       const appType = typeof params.appType === "string" ? params.appType : "General dApp";
       const needs   = Array.isArray(params.needs) ? (params.needs as string[]) : [];
+      console.time("[advisor] generateDeployAdvice");
       const advice = await generateDeployAdvice(
         minitiasWith, l1Raw.bridges, ibcChannels, { appType, needs }, oracleHistory ?? undefined
       );
+      console.timeEnd("[advisor] generateDeployAdvice");
       return NextResponse.json({ type, advice, oracleGrounded: !!oracleHistory?.length });
     }
 

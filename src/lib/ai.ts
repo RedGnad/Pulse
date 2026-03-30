@@ -171,16 +171,27 @@ IMPORTANT: The live metrics you see are from the Initia TESTNET (initiation-2). 
 export async function generateInsights(data: EcosystemOverview, forceReal = false): Promise<EcosystemInsights> {
   if (IS_MOCK && !forceReal) return { ...MOCK_INSIGHTS, generated_at: new Date().toISOString() };
 
-  const context = buildEcosystemContext(data);
+  const fallback: EcosystemInsights = {
+    daily_brief: "Ecosystem data collected. Analysis temporarily unavailable.",
+    ecosystem_health: "stable",
+    top_chain: { name: "—", metric: "—", reason: "Insufficient data" },
+    anomalies: [],
+    bridge_summary: "Bridge channel data available. Volume metrics pending.",
+    key_insights: [],
+    generated_at: new Date().toISOString(),
+  };
 
-  const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 900,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Analyze this ecosystem snapshot and return a JSON object with this exact structure:
+  try {
+    const context = buildEcosystemContext(data);
+
+    const message = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 900,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: `Analyze this ecosystem snapshot and return a JSON object with this exact structure:
 {
   "daily_brief": "2-3 sentence narrative summary of the current ecosystem state",
   "ecosystem_health": "thriving|growing|stable|stagnant",
@@ -196,28 +207,22 @@ Return ONLY valid JSON, no markdown, no explanation.
 
 DATA:
 ${context}`,
-      },
-    ],
-  });
+        },
+      ],
+    });
 
-  const rawText = message.content[0].type === "text" ? message.content[0].text : "{}";
-  // Strip markdown code fences if Claude wraps the JSON
-  const raw = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+    const rawText = message.content[0].type === "text" ? message.content[0].text : "{}";
+    const raw = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
-  try {
-    const parsed = JSON.parse(raw);
-    return { ...parsed, generated_at: new Date().toISOString() };
-  } catch {
-    // Fallback if Claude returns something unexpected
-    return {
-      daily_brief: "Ecosystem data collected. Analysis temporarily unavailable.",
-      ecosystem_health: "stable",
-      top_chain: { name: "—", metric: "—", reason: "Insufficient data" },
-      anomalies: [],
-      bridge_summary: "Bridge channel data available. Volume metrics pending.",
-      key_insights: [],
-      generated_at: new Date().toISOString(),
-    };
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...parsed, generated_at: new Date().toISOString() };
+    } catch {
+      return fallback;
+    }
+  } catch (err) {
+    console.error("[generateInsights] API call failed, using fallback:", err instanceof Error ? err.message : err);
+    return fallback;
   }
 }
 
@@ -303,21 +308,18 @@ Return JSON:
 }
 Include 2 alternatives. If no live chains match well, say so in warnings.`;
 
-  if (IS_MOCK) {
-    // Data-driven mock: rank chains by relevance to requirements
+  // Data-driven scoring (used for mock mode AND as fallback when API is unavailable)
+  function localDeployAdvice(): DeployAdvice {
     const scored = live.map(m => {
       let score = 40;
       const bridge = bridges.find(b => b.bridge_id === m.bridgeId);
-      // Use Pulse Score as base if available (more balanced than raw tx count)
       if (m.pulseScore?.total) score = Math.max(score, m.pulseScore.total);
-      // Requirement-specific boosts
       if (requirements.needs.includes("oracle") && bridge?.config.oracle_enabled) score += 15;
       if (requirements.needs.includes("ibc") && ibcChannels.some(c => c.sourceChainId === m.chainId)) score += 12;
       if (requirements.needs.includes("celestia") && bridge?.batch_info?.chain_type === "CELESTIA") score += 15;
       if (requirements.needs.includes("fast") && (m.metrics?.avgBlockTime ?? 99) < 2) score += 15;
       if (requirements.needs.includes("evm") && (m.chainId.includes("evm") || m.chainId.includes("move"))) score += 15;
-      if (requirements.needs.includes("low-gas")) score += 5; // all minitias are free gas
-      // App type adjustments
+      if (requirements.needs.includes("low-gas")) score += 5;
       if (requirements.appType === "DeFi / DEX" && (m.metrics?.avgBlockTime ?? 99) < 1.5) score += 10;
       if (requirements.appType === "Gaming / NFT" && (m.metrics?.avgBlockTime ?? 99) < 1) score += 10;
       if (requirements.appType === "Data / Oracle" && ibcChannels.filter(c => c.sourceChainId === m.chainId).length > 2) score += 10;
@@ -344,16 +346,23 @@ Include 2 alternatives. If no live chains match well, say so in warnings.`;
     };
   }
 
-  const msg = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 600,
-    system: ADVISOR_SYSTEM,
-    messages: [{ role: "user", content: prompt }],
-  });
-  const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
-    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  try { return JSON.parse(raw) as DeployAdvice; } catch {
-    return { top_chain: { chainId: "—", prettyName: "—", score: 0, reason: "Parse error." }, alternatives: [], rationale: "Analysis failed.", warnings: [] };
+  if (IS_MOCK) return localDeployAdvice();
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 600,
+      system: ADVISOR_SYSTEM,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
+      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+    try { return JSON.parse(raw) as DeployAdvice; } catch {
+      return localDeployAdvice();
+    }
+  } catch (err) {
+    console.error("[generateDeployAdvice] API failed, using local scoring:", err instanceof Error ? err.message : err);
+    return localDeployAdvice();
   }
 }
 
@@ -400,24 +409,20 @@ Return JSON:
 }
 Provide exactly 3 recommendations.`;
 
-  if (IS_MOCK) {
-    // Data-driven mock: pick validators based on risk profile
+  function localStakeAdvice(): StakeAdvice {
     const active = validators.filter(v => !v.jailed).sort((a, b) => parseInt(b.voting_power) - parseInt(a.voting_power));
     const totalPwr = active.reduce((s, v) => s + parseInt(v.voting_power || "0"), 0);
     let picks: typeof active;
     let strategy: string;
     if (riskProfile === "conservative") {
-      // Mid-range validators with low commission, skip top-3 for decentralization
       picks = active.slice(3).filter(v => parseFloat(v.commission_rate || "0") < 0.1).slice(0, 3);
       if (picks.length < 3) picks = active.slice(3, 6);
       const top3Power = active.slice(0, 3).reduce((s, v) => s + parseInt(v.voting_power || "0"), 0);
       strategy = `Split ${amount} INIT across ${picks.length} mid-tier validators to maximize decentralization. Avoiding top-3 validators who control ${totalPwr > 0 ? ((top3Power / totalPwr) * 100).toFixed(0) : "?"}% of voting power.`;
     } else if (riskProfile === "aggressive") {
-      // Lowest commission validators
       picks = [...active].sort((a, b) => parseFloat(a.commission_rate || "0") - parseFloat(b.commission_rate || "0")).slice(0, 3);
       strategy = `Stake ${amount} INIT with lowest-commission validators for maximum yield. Accept concentration risk.`;
     } else {
-      // Balanced: mix of top, mid, small
       picks = [active[1], active[Math.floor(active.length / 3)], active[Math.floor(active.length * 2 / 3)]].filter(Boolean);
       strategy = `Distribute ${amount} INIT across large, mid, and small validators for balanced risk/reward.`;
     }
@@ -439,16 +444,23 @@ Provide exactly 3 recommendations.`;
     };
   }
 
-  const msg = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 600,
-    system: ADVISOR_SYSTEM,
-    messages: [{ role: "user", content: prompt }],
-  });
-  const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
-    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  try { return JSON.parse(raw) as StakeAdvice; } catch {
-    return { recommendations: [], strategy: "Analysis failed.", warnings: [] };
+  if (IS_MOCK) return localStakeAdvice();
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 600,
+      system: ADVISOR_SYSTEM,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
+      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+    try { return JSON.parse(raw) as StakeAdvice; } catch {
+      return localStakeAdvice();
+    }
+  } catch (err) {
+    console.error("[generateStakeAdvice] API failed, using local scoring:", err instanceof Error ? err.message : err);
+    return localStakeAdvice();
   }
 }
 
@@ -508,8 +520,7 @@ Return JSON:
   "rationale": "1-2 sentences explaining why this path"
 }`;
 
-  if (IS_MOCK) {
-    // Data-driven mock: check if direct IBC channel exists
+  function localBridgeAdvice(): BridgeAdvice {
     const directIbc = ibcChannels.find(c =>
       c.portId === "transfer" &&
       ((c.sourceChainId === params.fromChain && c.destChainId === params.toChain) ||
@@ -531,7 +542,6 @@ Return JSON:
         rationale: `Direct IBC transfer channel exists between ${fromMinitia?.prettyName ?? params.fromChain} and ${toMinitia?.prettyName ?? params.toChain}. This is the fastest and cheapest route.`,
       };
     }
-    // Route via L1
     const l1Id = params.fromChain.startsWith("init") ? params.fromChain : "initiation-2";
     return {
       path: [params.fromChain, l1Id, params.toChain],
@@ -544,16 +554,23 @@ Return JSON:
     };
   }
 
-  const msg = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 500,
-    system: ADVISOR_SYSTEM,
-    messages: [{ role: "user", content: prompt }],
-  });
-  const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
-    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
-  try { return JSON.parse(raw) as BridgeAdvice; } catch {
-    return { path: [], total_time: "—", steps: [], rationale: "Analysis failed." };
+  if (IS_MOCK) return localBridgeAdvice();
+
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 500,
+      system: ADVISOR_SYSTEM,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
+      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+    try { return JSON.parse(raw) as BridgeAdvice; } catch {
+      return localBridgeAdvice();
+    }
+  } catch (err) {
+    console.error("[generateBridgeAdvice] API failed, using local routing:", err instanceof Error ? err.message : err);
+    return localBridgeAdvice();
   }
 }
 
@@ -608,16 +625,21 @@ RESPONSE BEHAVIOR:
 - If they ask about bridging, give the specific route and mention the bridge button.
 - Always be actionable and specific, not just descriptive.`;
 
-  const response = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: fullMode ? 500 : 250,
-    system: SYSTEM_PROMPT + `
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: fullMode ? 500 : 250,
+      system: SYSTEM_PROMPT + `
 You are Pulse AI, the chat assistant for Initia Pulse.
 ${fullMode ? fullRules : widgetRules}
 - If asked what the app does: "Initia Pulse monitors 13+ rollups in real-time, writes AI analysis on-chain via PulseOracle, and helps you deploy, stake, or bridge with live intelligence."
 - Ground every answer in the live ecosystem data provided. Be specific with numbers.`,
-    messages,
-  });
+      messages,
+    });
 
-  return response.content[0].type === "text" ? response.content[0].text : "Unable to process query.";
+    return response.content[0].type === "text" ? response.content[0].text : "Unable to process query.";
+  } catch (err) {
+    console.error("[chatWithEcosystem] API failed, using mock reply:", err instanceof Error ? err.message : err);
+    return mockChatReply(data, message);
+  }
 }
