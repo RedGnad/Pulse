@@ -1,5 +1,5 @@
 import { apiFetchSafe } from "./initia-client";
-import { MinitiaInfo, MinitiaWithMetrics, MinitiaMetrics } from "./types";
+import { MinitiaInfo, MinitiaWithMetrics, MinitiaMetrics, TokenAmount } from "./types";
 
 // ─── Rollytics indexer data per minitia ───────────────────────────────────────
 async function fetchRolyticsTxCount(indexerUrl: string): Promise<number> {
@@ -34,6 +34,15 @@ async function fetchRolyticsLatestBlock(indexerUrl: string) {
     gasWanted: parseInt(b.gas_wanted ?? "0", 10),
     txCount: parseInt(b.tx_count ?? "0", 10),
   };
+}
+
+async function fetchTotalSupply(restUrl: string): Promise<TokenAmount[]> {
+  const data = await apiFetchSafe<{ supply: { denom: string; amount: string }[] }>(
+    `${restUrl}/cosmos/bank/v1beta1/supply?pagination.limit=20`,
+    { supply: [] },
+    3000
+  );
+  return (data.supply ?? []).filter(s => s.amount !== "0");
 }
 
 // ─── REST metrics per minitia ─────────────────────────────────────────────────
@@ -72,6 +81,7 @@ export async function fetchMinitiaMetrics(minitia: MinitiaInfo): Promise<Minitia
     minitia.indexerUrl ? fetchRolyticsTxCount(minitia.indexerUrl) : Promise.resolve(0),
     minitia.indexerUrl ? fetchRolyticsAvgBlockTime(minitia.indexerUrl) : Promise.resolve(undefined),
     minitia.indexerUrl ? fetchRolyticsLatestBlock(minitia.indexerUrl) : Promise.resolve(undefined),
+    restUrl ? fetchTotalSupply(restUrl) : Promise.resolve([]),
   ]);
 
   const blockData   = tasks[0].status === "fulfilled" ? tasks[0].value : null;
@@ -79,6 +89,7 @@ export async function fetchMinitiaMetrics(minitia: MinitiaInfo): Promise<Minitia
   const txCount     = tasks[2].status === "fulfilled" ? tasks[2].value : 0;
   const avgBlock    = tasks[3].status === "fulfilled" ? tasks[3].value : undefined;
   const latestBlock = tasks[4].status === "fulfilled" ? tasks[4].value : undefined;
+  const supply      = tasks[5].status === "fulfilled" ? tasks[5].value : [];
 
   return {
     ...base,
@@ -86,6 +97,7 @@ export async function fetchMinitiaMetrics(minitia: MinitiaInfo): Promise<Minitia
     latestBlockTime: blockData?.time,
     activeValidators: valCount || undefined,
     totalTxCount: txCount,
+    totalSupply: supply as TokenAmount[],
     avgBlockTime: avgBlock,
     lastBlockGasUsed: latestBlock?.gasUsed,
     lastBlockGasWanted: latestBlock?.gasWanted,
