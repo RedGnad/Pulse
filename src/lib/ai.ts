@@ -53,17 +53,57 @@ const MOCK_INSIGHTS: EcosystemInsights = {
   generated_at: new Date().toISOString(),
 };
 
-function mockChatReply(data?: EcosystemOverview): string {
+function mockChatReply(data?: EcosystemOverview, message?: string): string {
   if (!data) return "No ecosystem data available. Try again in a moment.";
   const live = data.minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0 && !m.isMainnetRef);
-  const top = live.sort((a, b) => (b.metrics?.totalTxCount ?? 0) - (a.metrics?.totalTxCount ?? 0)).slice(0, 3);
-  const chainList = top.map(m => `**${m.prettyName}** (${(m.metrics?.totalTxCount ?? 0).toLocaleString()} txs, block ${(m.metrics?.blockHeight ?? 0).toLocaleString()})`).join(", ");
+  const byTx = [...live].sort((a, b) => (b.metrics?.totalTxCount ?? 0) - (a.metrics?.totalTxCount ?? 0));
+  const byScore = [...live].sort((a, b) => (b.pulseScore?.total ?? 0) - (a.pulseScore?.total ?? 0));
+  const byBlockTime = [...live].sort((a, b) => (a.metrics?.avgBlockTime ?? 99) - (b.metrics?.avgBlockTime ?? 99));
   const network = data.l1.chainId.includes("interwoven") ? "mainnet" : "testnet";
-  return `**Ecosystem Report — ${network.toUpperCase()}**\n\n`
-    + `The Initia ${network} is running with **${live.length} active rollups** and **${data.totalIbcChannels} IBC channels**. `
-    + `L1 is at block **${data.l1.blockHeight.toLocaleString()}** with **${data.l1.totalValidators} validators** and **${data.l1.totalTxCount.toLocaleString()}** total transactions.\n\n`
-    + `**Most active chains:** ${chainList || "No active chains detected"}.\n\n`
-    + `All chains are producing blocks and cross-rollup communication via IBC is operational.`;
+  const q = (message ?? "").toLowerCase();
+
+  // Deploy questions
+  if (q.includes("deploy") || q.includes("build") || q.includes("launch") || q.includes("where should")) {
+    const top3 = byScore.slice(0, 3);
+    return `For deploying on Initia ${network}, here are the top chains by Pulse Score:\n\n`
+      + top3.map((m, i) => `**${i + 1}. ${m.prettyName}** — Pulse Score ${m.pulseScore?.total ?? "N/A"}/100, ${(m.metrics?.totalTxCount ?? 0).toLocaleString()} txs, ${m.metrics?.avgBlockTime?.toFixed(1) ?? "?"}s blocks`).join("\n")
+      + `\n\n${top3[0]?.prettyName} leads with the best combination of activity, decentralization, and IBC connectivity. For DeFi apps specifically, fast block time matters most — ${byBlockTime[0]?.prettyName} has the fastest at ${byBlockTime[0]?.metrics?.avgBlockTime?.toFixed(1)}s.`;
+  }
+
+  // Staking questions
+  if (q.includes("stak") || q.includes("validator") || q.includes("delegate")) {
+    const vals = data.l1.validators?.slice(0, 3) ?? [];
+    return `There are **${data.l1.totalValidators} validators** on Initia ${network}. `
+      + `For a balanced staking strategy, consider splitting across mid-tier validators to support decentralization.\n\n`
+      + (vals.length > 0 ? `Top validators by voting power: ${vals.map(v => `**${v.moniker}** (${(parseFloat(v.commission_rate || "0") * 100).toFixed(0)}% commission)`).join(", ")}.` : "")
+      + `\n\nAvoid concentrating on the top 1-2 validators — the network is healthier when stake is distributed.`;
+  }
+
+  // Bridge questions
+  if (q.includes("bridge") || q.includes("transfer") || q.includes("move") || q.includes("send")) {
+    return `You can bridge INIT tokens directly from this page using the Interwoven Bridge. `
+      + `The Pulse rollup (initia-pulse-1) is connected to Initia L1 via OPinit bridge.\n\n`
+      + `There are currently **${data.totalIbcChannels} IBC channels** active across the ${network}. `
+      + `Click the Bridge button to start a transfer.`;
+  }
+
+  // Health / status questions
+  if (q.includes("health") || q.includes("status") || q.includes("how is") || q.includes("report")) {
+    const top = byTx.slice(0, 3);
+    const chainList = top.map(m => `**${m.prettyName}** (${(m.metrics?.totalTxCount ?? 0).toLocaleString()} txs)`).join(", ");
+    return `**Ecosystem Status — ${network.toUpperCase()}**\n\n`
+      + `${live.length} active rollups, ${data.totalIbcChannels} IBC channels, ${data.l1.totalValidators} validators. `
+      + `L1 at block ${data.l1.blockHeight.toLocaleString()} with ${data.l1.totalTxCount.toLocaleString()} total txs.\n\n`
+      + `Most active: ${chainList}. All chains producing blocks normally.`;
+  }
+
+  // Default — still give useful info
+  const top = byTx.slice(0, 3);
+  const chainList = top.map(m => `**${m.prettyName}** (${(m.metrics?.totalTxCount ?? 0).toLocaleString()} txs, score ${m.pulseScore?.total ?? "?"})`).join(", ");
+  return `The Initia ${network} has **${live.length} active rollups** and **${data.totalIbcChannels} IBC channels**. `
+    + `L1 is at block **${data.l1.blockHeight.toLocaleString()}** with **${data.l1.totalValidators} validators**.\n\n`
+    + `Top chains: ${chainList}.\n\n`
+    + `Ask me about deploying, staking, bridging, or ecosystem health for specific recommendations.`;
 }
 
 function buildEcosystemContext(data: EcosystemOverview): string {
@@ -209,7 +249,8 @@ export async function generateDeployAdvice(
   requirements: { appType: string; needs: string[] },
   oracleHistory?: { ecosystemHealth: string; brief: string; blockHeight: number; activeMinitilas: number }[]
 ): Promise<DeployAdvice> {
-  const live = minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0);
+  // Exclude our own rollup from deploy recommendations — it's an oracle, not a general-purpose chain
+  const live = minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0 && !m.isOurs && m.chainId !== "initia-pulse-1");
 
   const chainSummaries = live.map(m => {
     const bridge = bridges.find(b => b.bridge_id === m.bridgeId);
@@ -265,17 +306,21 @@ Include 2 alternatives. If no live chains match well, say so in warnings.`;
   if (IS_MOCK) {
     // Data-driven mock: rank chains by relevance to requirements
     const scored = live.map(m => {
-      let score = 50;
+      let score = 40;
       const bridge = bridges.find(b => b.bridge_id === m.bridgeId);
-      if (m.metrics?.totalTxCount)   score += Math.min(20, Math.floor(m.metrics.totalTxCount / 10000));
-      if (m.metrics?.avgBlockTime && m.metrics.avgBlockTime < 2) score += 10;
+      // Use Pulse Score as base if available (more balanced than raw tx count)
+      if (m.pulseScore?.total) score = Math.max(score, m.pulseScore.total);
+      // Requirement-specific boosts
       if (requirements.needs.includes("oracle") && bridge?.config.oracle_enabled) score += 15;
-      if (requirements.needs.includes("ibc") && ibcChannels.some(c => c.sourceChainId === m.chainId)) score += 10;
+      if (requirements.needs.includes("ibc") && ibcChannels.some(c => c.sourceChainId === m.chainId)) score += 12;
       if (requirements.needs.includes("celestia") && bridge?.batch_info?.chain_type === "CELESTIA") score += 15;
       if (requirements.needs.includes("fast") && (m.metrics?.avgBlockTime ?? 99) < 2) score += 15;
       if (requirements.needs.includes("evm") && (m.chainId.includes("evm") || m.chainId.includes("move"))) score += 15;
-      // Boost for higher block production
-      if (m.metrics?.blockHeight && m.metrics.blockHeight > 1000000) score += 5;
+      if (requirements.needs.includes("low-gas")) score += 5; // all minitias are free gas
+      // App type adjustments
+      if (requirements.appType === "DeFi / DEX" && (m.metrics?.avgBlockTime ?? 99) < 1.5) score += 10;
+      if (requirements.appType === "Gaming / NFT" && (m.metrics?.avgBlockTime ?? 99) < 1) score += 10;
+      if (requirements.appType === "Data / Oracle" && ibcChannels.filter(c => c.sourceChainId === m.chainId).length > 2) score += 10;
       return { m, score: Math.min(score, 98) };
     }).sort((a, b) => b.score - a.score);
 
@@ -518,7 +563,7 @@ export async function chatWithEcosystem(
   data: EcosystemOverview,
   fullMode = false
 ): Promise<string> {
-  if (IS_MOCK) return mockChatReply(data);
+  if (IS_MOCK) return mockChatReply(data, message);
 
   const context = buildEcosystemContext(data);
 
@@ -545,7 +590,8 @@ export async function chatWithEcosystem(
 CRITICAL FORMATTING RULES:
 - Answer in 2-4 SHORT sentences MAX. Never exceed 4 sentences.
 - NEVER use markdown headers (##), bullet points, bold (**), or code blocks.
-- Use plain conversational text only.`;
+- Use plain conversational text only.
+- ANSWER THE ACTUAL QUESTION — don't default to a generic ecosystem report. Be specific and actionable.`;
 
   const fullRules = `
 FORMATTING RULES:
@@ -553,7 +599,14 @@ FORMATTING RULES:
 - You may use simple line breaks to separate ideas, but avoid heavy markdown.
 - Reference Pulse Scores (0-100) when comparing chains — they are computed from live data.
 - If the user asks about a specific chain, mention its Pulse Score breakdown (activity, decentralization, bridge, growth, uptime).
-- When mentioning bridging, tell the user they can bridge directly from this page.`;
+- When mentioning bridging, tell the user they can bridge directly from this page.
+
+RESPONSE BEHAVIOR:
+- ANSWER THE USER'S ACTUAL QUESTION. If they ask "where to deploy", recommend specific chains with reasons — don't just give a generic ecosystem report.
+- If they ask for deployment advice, rank the top 2-3 chains by Pulse Score and explain why each is suitable.
+- If they ask about staking, recommend specific validators with commission rates.
+- If they ask about bridging, give the specific route and mention the bridge button.
+- Always be actionable and specific, not just descriptive.`;
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
