@@ -258,6 +258,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 <circle
                   r={size}
                   fill={conn.color}
+                  opacity={0}
                 >
                   <animateMotion
                     dur={`${dur}s`} begin={`${delay}s`}
@@ -275,6 +276,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 <circle
                   r={size * 0.4}
                   fill="white"
+                  opacity={0}
                 >
                   <animateMotion
                     dur={`${dur}s`} begin={`${delay}s`}
