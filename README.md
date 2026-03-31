@@ -60,5 +60,5 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 - **Rollup**: MiniEVM on Initia testnet (initiation-2) via Weave CLI
 - **Contract**: Solidity ^0.8.24, deployed with Foundry
 - **Frontend**: Next.js 16, TypeScript, InterwovenKit v2, wagmi, TanStack Query
-- **AI**: Anthropic Claude for ecosystem analysis, chat, and advisor
+- **AI**: Anthropic Claude for ecosystem analysis, chat, and advisor, built for multi-agentic analysis
 - **Native Feature**: Interwoven Bridge via `openBridge()`
