@@ -201,7 +201,10 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
         })}
 
         {/* Animated flow particles — fast + low cadence via keyPoints */}
+        {/* Particles wait for their connection line to finish entering (ci * 0.08 + 0.6s) */}
         {connections.filter(c => c.isLive).map((conn, i) => {
+          const ci = connections.indexOf(conn); // original index in full connections array
+          const lineEnteredAt = ci * 0.08 + 0.6; // time when this connection line is fully visible
           const isActive = conn.nodeId === activeNodeId;
           const isFocused = activeNodeId !== null;
           const groupOpacity = isActive ? 0.85 : isFocused ? 0.04 : 0.55;
@@ -209,7 +212,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
           return Array.from({ length: particleCount }, (_, pi) => {
             const dur = 1.8 + (i * 0.12) + (pi * 0.25);
             const size = isActive ? 3 : 2.2;
-            const delay = pi * (dur / particleCount) + i * 0.3;
+            const delay = lineEnteredAt + pi * (dur / particleCount) + i * 0.3;
             return (
               <g key={`particle-${conn.nodeId}-${pi}`}
                 style={{ transition: "opacity 0.3s" }}
@@ -218,7 +221,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 <ellipse
                   rx={size * 6} ry={size * 0.7}
                   fill={conn.color}
-                  opacity={groupOpacity * 0.25}
+                  opacity={0}
                 >
                   <animateMotion
                     dur={`${dur}s`} begin={`${delay}s`}
@@ -237,7 +240,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 <circle
                   r={size * 2.2}
                   fill={conn.color}
-                  opacity={groupOpacity * 0.15}
+                  opacity={0}
                 >
                   <animateMotion
                     dur={`${dur}s`} begin={`${delay}s`}

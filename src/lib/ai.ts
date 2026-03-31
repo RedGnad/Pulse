@@ -1,10 +1,60 @@
 import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { EcosystemOverview, MinitiaWithMetrics, L1Validator, OpinitBridge, IbcChannel, DeployAdvice, StakeAdvice, BridgeAdvice } from "./types";
 import { formatNumber } from "./format";
 
+// ─── Multi-provider AI configuration ─────────────────────────────────────────
+// AI_PROVIDER: "anthropic" (default) | "openai" (covers OpenAI, Ollama, LM Studio, Groq, Together, etc.)
+// AI_MODEL: model ID to use (defaults to claude-haiku-4-5-20251001 for anthropic, gpt-4o-mini for openai)
+// AI_BASE_URL: custom base URL for openai-compatible providers (e.g. http://localhost:11434/v1 for Ollama)
+// AI_API_KEY: generic API key (falls back to ANTHROPIC_API_KEY or OPENAI_API_KEY)
+
+const AI_PROVIDER = (process.env.AI_PROVIDER ?? "anthropic").toLowerCase();
+const AI_MODEL = process.env.AI_MODEL
+  ?? (AI_PROVIDER === "anthropic" ? "claude-haiku-4-5-20251001" : "gpt-4o-mini");
+const AI_API_KEY = process.env.AI_API_KEY
+  ?? (AI_PROVIDER === "anthropic" ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY)
+  ?? "";
+
 export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
+  apiKey: AI_PROVIDER === "anthropic" ? AI_API_KEY : (process.env.ANTHROPIC_API_KEY ?? "unused"),
 });
+
+const openai = new OpenAI({
+  apiKey: AI_API_KEY || "unused",
+  ...(process.env.AI_BASE_URL ? { baseURL: process.env.AI_BASE_URL } : {}),
+});
+
+/**
+ * Unified LLM call — routes to Anthropic or OpenAI-compatible provider.
+ * Returns the text content of the first message.
+ */
+async function callLLM(opts: {
+  system: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+  maxTokens: number;
+}): Promise<string> {
+  if (AI_PROVIDER === "openai") {
+    const res = await openai.chat.completions.create({
+      model: AI_MODEL,
+      max_tokens: opts.maxTokens,
+      messages: [
+        { role: "system", content: opts.system },
+        ...opts.messages,
+      ],
+    });
+    return res.choices[0]?.message?.content ?? "";
+  }
+
+  // Default: Anthropic
+  const res = await anthropic.messages.create({
+    model: AI_MODEL,
+    max_tokens: opts.maxTokens,
+    system: opts.system,
+    messages: opts.messages,
+  });
+  return res.content[0].type === "text" ? res.content[0].text : "";
+}
 
 export interface EcosystemInsights {
   daily_brief: string;
@@ -184,10 +234,9 @@ export async function generateInsights(data: EcosystemOverview, forceReal = fals
   try {
     const context = buildEcosystemContext(data);
 
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 900,
+    const rawText = await callLLM({
       system: SYSTEM_PROMPT,
+      maxTokens: 900,
       messages: [
         {
           role: "user",
@@ -211,7 +260,6 @@ ${context}`,
       ],
     });
 
-    const rawText = message.content[0].type === "text" ? message.content[0].text : "{}";
     const raw = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 
     try {
@@ -349,14 +397,8 @@ Include 2 alternatives. If no live chains match well, say so in warnings.`;
   if (IS_MOCK) return localDeployAdvice();
 
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 600,
-      system: ADVISOR_SYSTEM,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
-      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+    const text = await callLLM({ system: ADVISOR_SYSTEM, maxTokens: 600, messages: [{ role: "user", content: prompt }] });
+    const raw = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
     try { return JSON.parse(raw) as DeployAdvice; } catch {
       return localDeployAdvice();
     }
@@ -447,14 +489,8 @@ Provide exactly 3 recommendations.`;
   if (IS_MOCK) return localStakeAdvice();
 
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 600,
-      system: ADVISOR_SYSTEM,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
-      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+    const text = await callLLM({ system: ADVISOR_SYSTEM, maxTokens: 600, messages: [{ role: "user", content: prompt }] });
+    const raw = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
     try { return JSON.parse(raw) as StakeAdvice; } catch {
       return localStakeAdvice();
     }
@@ -557,14 +593,8 @@ Return JSON:
   if (IS_MOCK) return localBridgeAdvice();
 
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 500,
-      system: ADVISOR_SYSTEM,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const raw = (msg.content[0].type === "text" ? msg.content[0].text : "{}")
-      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+    const text = await callLLM({ system: ADVISOR_SYSTEM, maxTokens: 500, messages: [{ role: "user", content: prompt }] });
+    const raw = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
     try { return JSON.parse(raw) as BridgeAdvice; } catch {
       return localBridgeAdvice();
     }
@@ -595,10 +625,10 @@ export async function chatWithEcosystem(
     ? `${context}\n\nPULSE SCORES (0-100 health rating per chain):\n${scoreContext}`
     : context;
 
-  const messages: Anthropic.MessageParam[] = [
-    ...history.map((h) => ({ role: h.role, content: h.content })),
+  const chatMessages: { role: "user" | "assistant"; content: string }[] = [
+    ...history.map((h) => ({ role: h.role as "user" | "assistant", content: h.content })),
     {
-      role: "user",
+      role: "user" as const,
       content: `${message}\n\n[CURRENT ECOSYSTEM DATA]\n${fullContext}`,
     },
   ];
@@ -626,18 +656,15 @@ RESPONSE BEHAVIOR:
 - Always be actionable and specific, not just descriptive.`;
 
   try {
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: fullMode ? 500 : 250,
+    return await callLLM({
       system: SYSTEM_PROMPT + `
 You are Pulse AI, the chat assistant for Initia Pulse.
 ${fullMode ? fullRules : widgetRules}
 - If asked what the app does: "Initia Pulse monitors 13+ rollups in real-time, writes AI analysis on-chain via PulseOracle, and helps you deploy, stake, or bridge with live intelligence."
 - Ground every answer in the live ecosystem data provided. Be specific with numbers.`,
-      messages,
-    });
-
-    return response.content[0].type === "text" ? response.content[0].text : "Unable to process query.";
+      maxTokens: fullMode ? 500 : 250,
+      messages: chatMessages,
+    }) || "Unable to process query.";
   } catch (err) {
     console.error("[chatWithEcosystem] API failed, using mock reply:", err instanceof Error ? err.message : err);
     return mockChatReply(data, message);

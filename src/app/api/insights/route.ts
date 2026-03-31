@@ -9,9 +9,10 @@ import type { NetworkMode } from "@/contexts/network-context";
 export const revalidate = 300;
 
 export async function GET(req: NextRequest) {
-  if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === "your_api_key_here") {
+  const aiKey = process.env.AI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
+  if (!aiKey || aiKey === "your_api_key_here") {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY not configured. Add it to .env.local" },
+      { error: "AI API key not configured. Set AI_API_KEY (or ANTHROPIC_API_KEY / OPENAI_API_KEY) in .env.local" },
       { status: 503 }
     );
   }

@@ -23,7 +23,7 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
    weave rollup start -d && weave opinit start executor -d && weave relayer start -d
    ```
 
-2. **Configure environment:** Copy `.env.example` to `.env.local` and set your `ANTHROPIC_API_KEY` and `PULSE_ORACLE_PRIVATE_KEY`.
+2. **Configure environment:** Copy `.env.example` to `.env.local` and set your AI key and `PULSE_ORACLE_PRIVATE_KEY`.
 
 3. **Start the app:**
    ```bash
@@ -43,7 +43,7 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 └──────────────┬──────────────────────────────┘
                │ API routes
 ┌──────────────▼──────────────────────────────┐
-│  AI Engine (Anthropic Claude)               │
+│  AI Engine (Anthropic / OpenAI / Local LLM)  │
 │  Ecosystem analysis · Advisor · Chat        │
 └──────────────┬──────────────────────────────┘
                │ ethers.js
@@ -55,10 +55,45 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 └─────────────────────────────────────────────┘
 ```
 
+## AI Configuration
+
+Pulse supports **any LLM provider** — Anthropic, OpenAI, or any OpenAI-compatible API (Ollama, LM Studio, Groq, Together, etc.).
+
+| Variable | Description | Default |
+|---|---|---|
+| `AI_PROVIDER` | `anthropic` or `openai` (for any OpenAI-compatible API) | `anthropic` |
+| `AI_MODEL` | Model ID to use | `claude-haiku-4-5-20251001` (anthropic) / `gpt-4o-mini` (openai) |
+| `AI_API_KEY` | API key (falls back to `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`) | — |
+| `AI_BASE_URL` | Custom base URL for local/self-hosted models | — |
+| `AI_MOCK` | Set to `true` to skip AI calls entirely (dev mode) | `false` |
+
+**Examples:**
+
+```bash
+# Anthropic (default)
+AI_API_KEY=sk-ant-...
+
+# OpenAI
+AI_PROVIDER=openai
+AI_API_KEY=sk-...
+
+# Ollama (local)
+AI_PROVIDER=openai
+AI_MODEL=llama3
+AI_BASE_URL=http://localhost:11434/v1
+AI_API_KEY=ollama
+
+# LM Studio (local)
+AI_PROVIDER=openai
+AI_MODEL=local-model
+AI_BASE_URL=http://localhost:1234/v1
+AI_API_KEY=lm-studio
+```
+
 ## Tech Stack
 
 - **Rollup**: MiniEVM on Initia testnet (initiation-2) via Weave CLI
 - **Contract**: Solidity ^0.8.24, deployed with Foundry
 - **Frontend**: Next.js 16, TypeScript, InterwovenKit v2, wagmi, TanStack Query
-- **AI**: Anthropic Claude for ecosystem analysis, chat, and advisor, built for multi-agentic analysis
+- **AI**: Multi-provider (Anthropic, OpenAI, Ollama, LM Studio, Groq, or any OpenAI-compatible API), built for multi-agentic analysis
 - **Native Feature**: Interwoven Bridge via `openBridge()`
