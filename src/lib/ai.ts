@@ -254,12 +254,12 @@ export async function generateDeployAdvice(
   requirements: { appType: string; needs: string[] },
   oracleHistory?: { ecosystemHealth: string; brief: string; blockHeight: number; activeMinitilas: number }[]
 ): Promise<DeployAdvice> {
-  // Exclude our own rollup from deploy recommendations — it's an oracle, not a general-purpose chain
-  const live = minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0 && !m.isOurs && m.chainId !== "initia-pulse-1");
+  // Exclude our own rollup and mainnet visual-only refs from recommendations
+  const live = minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0 && !m.isOurs && !m.isMainnetRef && m.chainId !== "initia-pulse-1");
 
   const chainSummaries = live.map(m => {
     const bridge = bridges.find(b => b.bridge_id === m.bridgeId);
-    const channels = ibcChannels.filter(c => c.sourceChainId === m.chainId && c.portId === "transfer");
+    const channels = ibcChannels.filter(c => (c.sourceChainId === m.chainId || c.destChainId === m.chainId) && c.portId === "transfer");
     const parts: string[] = [
       `${m.prettyName} (${m.chainId})`,
       m.metrics?.avgBlockTime ? `block_time: ${m.metrics.avgBlockTime.toFixed(2)}s` : "",
@@ -281,7 +281,7 @@ export async function generateDeployAdvice(
     ...requirements.needs.map(need => {
       let matches: string[] = [];
       if (need === "oracle")   matches = live.filter(m => bridges.find(b => b.bridge_id === m.bridgeId)?.config.oracle_enabled).map(m => m.prettyName);
-      if (need === "ibc")      matches = live.filter(m => ibcChannels.some(c => c.sourceChainId === m.chainId && c.portId === "transfer")).map(m => m.prettyName);
+      if (need === "ibc")      matches = live.filter(m => ibcChannels.some(c => (c.sourceChainId === m.chainId || c.destChainId === m.chainId) && c.portId === "transfer")).map(m => m.prettyName);
       if (need === "celestia") matches = live.filter(m => bridges.find(b => b.bridge_id === m.bridgeId)?.batch_info?.chain_type === "CELESTIA").map(m => m.prettyName);
       if (need === "fast")     matches = live.filter(m => (m.metrics?.avgBlockTime ?? 99) < 2).map(m => m.prettyName);
       if (need === "evm")      matches = live.filter(m => m.chainId.includes("move") || m.chainId.includes("evm") || m.chainId.includes("black")).map(m => m.prettyName);
@@ -315,14 +315,14 @@ Include 2 alternatives. If no live chains match well, say so in warnings.`;
       const bridge = bridges.find(b => b.bridge_id === m.bridgeId);
       if (m.pulseScore?.total) score = Math.max(score, m.pulseScore.total);
       if (requirements.needs.includes("oracle") && bridge?.config.oracle_enabled) score += 15;
-      if (requirements.needs.includes("ibc") && ibcChannels.some(c => c.sourceChainId === m.chainId)) score += 12;
+      if (requirements.needs.includes("ibc") && ibcChannels.some(c => c.sourceChainId === m.chainId || c.destChainId === m.chainId)) score += 12;
       if (requirements.needs.includes("celestia") && bridge?.batch_info?.chain_type === "CELESTIA") score += 15;
       if (requirements.needs.includes("fast") && (m.metrics?.avgBlockTime ?? 99) < 2) score += 15;
       if (requirements.needs.includes("evm") && (m.chainId.includes("evm") || m.chainId.includes("move"))) score += 15;
       if (requirements.needs.includes("low-gas")) score += 5;
       if (requirements.appType === "DeFi / DEX" && (m.metrics?.avgBlockTime ?? 99) < 1.5) score += 10;
       if (requirements.appType === "Gaming / NFT" && (m.metrics?.avgBlockTime ?? 99) < 1) score += 10;
-      if (requirements.appType === "Data / Oracle" && ibcChannels.filter(c => c.sourceChainId === m.chainId).length > 2) score += 10;
+      if (requirements.appType === "Data / Oracle" && ibcChannels.filter(c => c.sourceChainId === m.chainId || c.destChainId === m.chainId).length > 2) score += 10;
       return { m, score: Math.min(score, 98) };
     }).sort((a, b) => b.score - a.score);
 

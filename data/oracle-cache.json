@@ -1,16 +1,66 @@
 {
-  "snapshotCount": "7",
+  "snapshotCount": "12",
   "latest": {
-    "timestamp": "1774912643",
-    "blockHeight": 21438238,
+    "timestamp": "1774916526",
+    "blockHeight": 21440135,
     "activeMinitilas": 6,
     "ibcChannels": 4,
     "totalValidators": 11,
-    "totalTxCount": 25175211,
+    "totalTxCount": 25177174,
     "ecosystemHealth": "growing",
-    "brief": "Initia testnet ecosystem operating at full capacity with 6 active minitias processing 29.79M cumulative transactions. Three mature rollups (EVM, Move, Wasm) maintain parity at ~15.2M blocks with consistent 682s block times, while Strat and Inertia show divergent throughput patterns. Initia Pulse appears dormant, requiring investigation."
+    "brief": "Initia testnet ecosystem operating at full capacity with 6 minitias all reachable and processing 29.80M transactions. Core chains (EVM, Move, Wasm) maintain synchronized block production around 15.2M blocks, while Strat and Initia Pulse show emerging activity with significantly lower block heights indicating newer or specialized deployments."
   },
   "history": [
+    {
+      "timestamp": "1774916526",
+      "blockHeight": 21440135,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25177174,
+      "ecosystemHealth": "growing",
+      "brief": "Initia testnet ecosystem operating at full capacity with 6 minitias all reachable and processing 29.80M transactions. Core chains (EVM, Move, Wasm) maintain synchronized block production around 15.2M blocks, while Strat and Initia Pulse show emerging activity with significantly lower block heights indicating newer or specialized deployments."
+    },
+    {
+      "timestamp": "1774916083",
+      "blockHeight": 21440096,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25177136,
+      "ecosystemHealth": "thriving",
+      "brief": "Initia testnet ecosystem running at full capacity with 6 live minitias processing 29.80M cumulative transactions; EVM, Move, and Wasm chains operating in lockstep at ~15.2M blocks each, while Initia Pulse remains in early stages with minimal block production."
+    },
+    {
+      "timestamp": "1774915351",
+      "blockHeight": 21439764,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25176796,
+      "ecosystemHealth": "thriving",
+      "brief": "Initia testnet ecosystem operating at full capacity with all 6 minitias online and synchronized within 1 block height variance. EVM, Move, and Wasm chains dominating activity at ~7.5M transactions each, while Strat and Initia Pulse show emerging or experimental deployment patterns."
+    },
+    {
+      "timestamp": "1774914633",
+      "blockHeight": 21439438,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25176459,
+      "ecosystemHealth": "thriving",
+      "brief": "Initia testnet ecosystem operating at full capacity with all 6 minitias reachable and synchronized. EVM, Move, and Wasm chains lead with ~15.2M blocks and 7.5M transactions each, while Strat and Initia Pulse show early-stage activity characteristic of newer deployments."
+    },
+    {
+      "timestamp": "1774914571",
+      "blockHeight": 21439420,
+      "activeMinitilas": 6,
+      "ibcChannels": 4,
+      "totalValidators": 11,
+      "totalTxCount": 25176441,
+      "ecosystemHealth": "growing",
+      "brief": "Initia testnet ecosystem operating at full capacity with all 6 minitias live and synchronized. EVM, Move, and Wasm chains maintaining parity at ~15.2M blocks with steady transaction throughput; Initia Pulse analytics chain showing stalled block production (540s lag)."
+    },
     {
       "timestamp": "1774912643",
       "blockHeight": 21438238,

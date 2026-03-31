@@ -806,7 +806,7 @@ function TxSuccess({ txHash }: { txHash: string }) {
         }}
       >
         <a
-          href={`https://scan.testnet.initia.xyz/initiation-2`}
+          href={`https://scan.testnet.initia.xyz/initiation-2/txs`}
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -825,10 +825,10 @@ function TxSuccess({ txHash }: { txHash: string }) {
           }}
         >
           <ExternalLink style={{ width: 10, height: 10 }} />
-          L1 Explorer
+          Initia Explorer
         </a>
         {mono(
-          "Custom rollup tx — verified directly via EVM RPC",
+          "Rollup EVM tx — not on public explorer, verified via RPC above",
           11,
           "#3A5A6A",
         )}
@@ -856,14 +856,18 @@ export default function OraclePage() {
     setWriting(true);
     setWriteError(null);
     try {
-      const res = await fetch("/api/oracle", { method: "POST" });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000); // 90s max
+      const res = await fetch("/api/oracle", { method: "POST", signal: controller.signal });
+      clearTimeout(timeout);
       const json = await res.json();
       if (json.success) {
         setLastTx(json.txHash);
         refetch();
       } else setWriteError(json.error ?? "Write failed");
     } catch (err) {
-      setWriteError(err instanceof Error ? err.message : "Write failed — check console");
+      const msg = err instanceof Error ? err.message : "Write failed";
+      setWriteError(msg.includes("abort") ? "Write timed out — try again" : msg);
     } finally {
       setWriting(false);
     }

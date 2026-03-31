@@ -22,6 +22,7 @@ interface RegistryChain {
   metadata?: {
     is_l1?: boolean;
     bridge_id?: string | number;
+    op_bridge_id?: string | number;
     op_denoms?: string;
     executor_uri?: string;
     ibc_channels?: {
@@ -88,7 +89,7 @@ function parseChain(chain: RegistryChain, folder: string): MinitiaInfo {
     },
     indexerUrl: chain.apis?.indexer?.[0]?.address,
     explorerUrl: chain.explorers?.[0]?.url,
-    bridgeId: chain.metadata?.bridge_id ? parseInt(String(chain.metadata.bridge_id), 10) : undefined,
+    bridgeId: (chain.metadata?.op_bridge_id ?? chain.metadata?.bridge_id) ? parseInt(String(chain.metadata.op_bridge_id ?? chain.metadata.bridge_id), 10) : undefined,
     logoUrl:
       chain.images?.[0]?.png ||
       chain.images?.[0]?.svg ||
