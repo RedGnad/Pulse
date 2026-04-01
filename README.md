@@ -102,9 +102,9 @@ AI_API_KEY=lm-studio
 
 ### ⚠️ Local Dev Limitation
 
-The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not registered on the Initia explorer or bridge UI**. This is a [known limitation for local rollups](https://docs.initia.xyz/hackathon/examples/evm-bank#-native-feature-interwoven-bridge).
+The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not registered on the Initia explorer or bridge UI**. This is a limitation for local rollups](https://docs.initia.xyz/hackathon/examples/evm-bank#-native-feature-interwoven-bridge).
 
-**What this means in practice:**
+**What this means:**
 
 - The **Interwoven Bridge** is fully implemented in code via InterwovenKit's `openBridge()` hook (5 integration points across the app), but the bridge modal won't list `initia-pulse-1` as a destination on the public bridge UI.
 - **This does not affect core functionality.** Pulse's value is read-only intelligence: the AI agent writes oracle snapshots using a backend signer key, and all dashboards, AI advisor, and chat features work independently of user-bridged assets. No user needs to bridge tokens to use Pulse.
