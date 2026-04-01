@@ -200,11 +200,10 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
           );
         })}
 
-        {/* Animated flow particles — fast + low cadence via keyPoints */}
-        {/* Particles wait for their connection line to finish entering (ci * 0.08 + 0.6s) */}
+        {/* Animated flow particles — use CSS animation on <g> to sync with line entry */}
         {connections.filter(c => c.isLive).map((conn, i) => {
-          const ci = connections.indexOf(conn); // original index in full connections array
-          const lineEnteredAt = ci * 0.08 + 0.6; // time when this connection line is fully visible
+          const ci = connections.indexOf(conn);
+          const lineEnteredAt = ci * 0.08 + 0.6; // CSS-based: when connection line is fully visible
           const isActive = conn.nodeId === activeNodeId;
           const isFocused = activeNodeId !== null;
           const groupOpacity = isActive ? 0.85 : isFocused ? 0.04 : 0.55;
@@ -212,19 +211,21 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
           return Array.from({ length: particleCount }, (_, pi) => {
             const dur = 1.8 + (i * 0.12) + (pi * 0.25);
             const size = isActive ? 3 : 2.2;
-            const delay = lineEnteredAt + pi * (dur / particleCount) + i * 0.3;
+            const smilDelay = pi * (dur / particleCount);
             return (
-              <g key={`particle-${conn.nodeId}-${pi}`}
-                style={{ transition: "opacity 0.3s" }}
+              <g key={`particle-${conn.nodeId}-${pi}-${n}`}
+                style={{
+                  animation: `ibc-node-enter 0.4s ease-out ${lineEnteredAt}s both`,
+                }}
               >
                 {/* Comet trail — single elongated ellipse, auto-rotates along curve */}
                 <ellipse
                   rx={size * 6} ry={size * 0.7}
                   fill={conn.color}
-                  opacity={0}
+                  opacity={groupOpacity * 0.25}
                 >
                   <animateMotion
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite" path={conn.path}
                     keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
                     rotate="auto"
@@ -232,7 +233,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                   <animate attributeName="opacity"
                     values={`0;${groupOpacity * 0.25};${groupOpacity * 0.25};0;0`}
                     keyTimes="0;0.01;0.18;0.21;1"
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite"
                   />
                 </ellipse>
@@ -240,17 +241,17 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 <circle
                   r={size * 2.2}
                   fill={conn.color}
-                  opacity={0}
+                  opacity={groupOpacity * 0.15}
                 >
                   <animateMotion
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite" path={conn.path}
                     keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
                   />
                   <animate attributeName="opacity"
                     values={`0;${groupOpacity * 0.15};${groupOpacity * 0.15};0;0`}
                     keyTimes="0;0.01;0.18;0.21;1"
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite"
                   />
                 </circle>
@@ -258,17 +259,17 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 <circle
                   r={size}
                   fill={conn.color}
-                  opacity={0}
+                  opacity={groupOpacity * 0.75}
                 >
                   <animateMotion
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite" path={conn.path}
                     keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
                   />
                   <animate attributeName="opacity"
                     values={`0;${groupOpacity * 0.75};${groupOpacity * 0.75};0;0`}
                     keyTimes="0;0.01;0.18;0.21;1"
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite"
                   />
                 </circle>
@@ -276,17 +277,17 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
                 <circle
                   r={size * 0.4}
                   fill="white"
-                  opacity={0}
+                  opacity={groupOpacity * 0.9}
                 >
                   <animateMotion
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite" path={conn.path}
                     keyPoints="0;1;1" keyTimes="0;0.2;1" calcMode="linear"
                   />
                   <animate attributeName="opacity"
                     values={`0;${groupOpacity * 0.9};${groupOpacity * 0.9};0;0`}
                     keyTimes="0;0.01;0.18;0.21;1"
-                    dur={`${dur}s`} begin={`${delay}s`}
+                    dur={`${dur}s`} begin={`${smilDelay}s`}
                     repeatCount="indefinite"
                   />
                 </circle>
