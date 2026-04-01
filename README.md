@@ -34,6 +34,20 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 
 ---
 
+### ⚠️ Local Dev Limitation
+
+The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not registered on the Initia explorer or bridge UI**. This is a [known limitation for local rollups](https://docs.initia.xyz/hackathon/examples/evm-bank#-native-feature-interwoven-bridge).
+
+**What this means in practice:**
+
+- The **Interwoven Bridge** is fully implemented in code via InterwovenKit's `openBridge()` hook (5 integration points across the app), but the bridge modal won't list `initia-pulse-1` as a destination on the public bridge UI.
+- **This does not affect core functionality.** Pulse's value is read-only intelligence: the AI agent writes oracle snapshots using a backend signer key, and all dashboards, AI advisor, and chat features work independently of user-bridged assets. No user needs to bridge tokens to use Pulse.
+- **Intended production flow:** In a registered rollup scenario, users would bridge INIT from L1 → Pulse rollup via the bridge widget, then interact with the PulseOracle contract directly. The bridge integration is ready for this — it just requires chain registration on the Initia bridge UI.
+
+**Live demo:** [initiapulse.vercel.app](https://initiapulse.vercel.app) — the full app runs with cached oracle data and AI insights. The rollup + oracle write flow is demonstrated in the [demo video](https://youtu.be/r3Uz-rFKzm0).
+
+---
+
 ## Architecture
 
 ```
