@@ -98,6 +98,8 @@ AI_API_KEY=lm-studio
 - **AI**: Multi-provider (Anthropic, OpenAI, Ollama, LM Studio, Groq, or any OpenAI-compatible API), built for multi-agentic analysis
 - **Native Feature**: Interwoven Bridge via `openBridge()`
 
+---
+
 ### ⚠️ Local Dev Limitation
 
 The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not registered on the Initia explorer or bridge UI**. This is a [known limitation for local rollups](https://docs.initia.xyz/hackathon/examples/evm-bank#-native-feature-interwoven-bridge).
