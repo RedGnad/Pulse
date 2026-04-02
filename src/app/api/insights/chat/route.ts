@@ -26,10 +26,11 @@ export async function POST(req: NextRequest) {
     ]);
 
     // Fetch user's staking delegations if they ask about their funds
-    const isWalletQuery = /\b(my|mes|mon|ma|nos|notre)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init|wallet|portefeuille)\b/i.test(message)
+    const isWalletQuery = /\b(my|mes|mon|ma|nos|notre|j'ai)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init|wallet|portefeuille)\b/i.test(message)
       || /\b(staké|staked|délégué|delegated)\b/i.test(message)
       || /\b(where|où|combien).*(stak|fond|fund|init|balanc|solde)/i.test(message)
-      || /\b(balance|solde|wallet|portefeuille)\b/i.test(message);
+      || /\b(balance|solde|wallet|portefeuille)\b/i.test(message)
+      || /\b(ai.je|j'ai|a.t.on)\b.*\b(fond|fund|init|token|stak)/i.test(message);
     let walletContext = "";
     if (isWalletQuery && userAddress) {
       const [balances, delegations] = await Promise.all([

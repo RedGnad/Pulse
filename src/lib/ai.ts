@@ -144,8 +144,10 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
 
   // ── Wallet / personal fund queries ──
 
-  const isWalletQuery = /\b(my|mes|mon|ma|nos|notre|a.t.on)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init)\b/i.test(q)
-    || /\b(where|où|combien).*(stak|fond|fund|init)/i.test(q);
+  const isWalletQuery = /\b(my|mes|mon|ma|nos|notre|j'ai|a.t.on)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init)\b/i.test(q)
+    || /\b(where|où|combien).*(stak|fond|fund|init|balanc|solde)/i.test(q)
+    || /\b(balance|solde|wallet|portefeuille)\b/i.test(q)
+    || /\b(ai.je|j'ai|a.t.on)\b.*\b(fond|fund|init|token|stak)/i.test(q);
   if (isWalletQuery) {
     // The chat route injects [USER WALLET DATA] into the message when available.
     // If wallet data is present in the message, the AI (or this mock) should use it.
