@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchEcosystemData } from "@/lib/initia-registry";
 import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
-import { fetchL1Data, fetchUserDelegations } from "@/lib/l1-api";
+import { fetchL1Data, fetchUserBalance, fetchUserDelegations } from "@/lib/l1-api";
 import { chatWithEcosystem } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
@@ -26,21 +26,34 @@ export async function POST(req: NextRequest) {
     ]);
 
     // Fetch user's staking delegations if they ask about their funds
-    const isWalletQuery = /\b(my|mes|mon|ma|nos|notre)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init)\b/i.test(message)
+    const isWalletQuery = /\b(my|mes|mon|ma|nos|notre)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init|wallet|portefeuille)\b/i.test(message)
       || /\b(staké|staked|délégué|delegated)\b/i.test(message)
-      || /\b(where|où|combien).*(stak|fond|fund|init)/i.test(message);
+      || /\b(where|où|combien).*(stak|fond|fund|init|balanc|solde)/i.test(message)
+      || /\b(balance|solde|wallet|portefeuille)\b/i.test(message);
     let walletContext = "";
     if (isWalletQuery && userAddress) {
-      const delegations = await fetchUserDelegations(userAddress, l1Raw.validators, network);
-      if (delegations.length > 0) {
-        const lines = delegations.map(d => {
-          const amt = (parseFloat(d.amount) / 1_000_000).toFixed(2);
-          return `- ${amt} ${d.denom === "uinit" ? "INIT" : d.denom} staked on **${d.validatorMoniker}**`;
+      const [balances, delegations] = await Promise.all([
+        fetchUserBalance(userAddress, network),
+        fetchUserDelegations(userAddress, l1Raw.validators, network),
+      ]);
+
+      const balanceLines = balances
+        .filter(b => parseFloat(b.amount) > 0)
+        .map(b => {
+          const amt = b.denom === "uinit"
+            ? `${(parseFloat(b.amount) / 1_000_000).toFixed(2)} INIT`
+            : `${b.amount} ${b.denom}`;
+          return `- ${amt}`;
         });
-        walletContext = `\n\n[USER WALLET DATA — address: ${userAddress}]\nStaking positions:\n${lines.join("\n")}\n`;
-      } else {
-        walletContext = `\n\n[USER WALLET DATA — address: ${userAddress}]\nNo active staking positions found.\n`;
-      }
+
+      const delegationLines = delegations.map(d => {
+        const amt = (parseFloat(d.amount) / 1_000_000).toFixed(2);
+        return `- ${amt} ${d.denom === "uinit" ? "INIT" : d.denom} staked on **${d.validatorMoniker}**`;
+      });
+
+      walletContext = `\n\n[USER WALLET DATA — address: ${userAddress}]`
+        + `\nAvailable balance:\n${balanceLines.length > 0 ? balanceLines.join("\n") : "- No tokens found"}`
+        + `\nStaking positions:\n${delegationLines.length > 0 ? delegationLines.join("\n") : "- No active staking positions"}\n`;
     }
     const minitiasWith = await fetchAllMinitiaMetrics(minitias);
 

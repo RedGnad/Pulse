@@ -102,6 +102,19 @@ export async function fetchValidators(network?: NetworkMode): Promise<{ validato
   };
 }
 
+// ─── User balance ────────────────────────────────────────────────────────────
+export async function fetchUserBalance(
+  address: string,
+  network?: NetworkMode,
+): Promise<{ denom: string; amount: string }[]> {
+  const { rest } = getL1Urls(network);
+  const data = await apiFetchSafe<{ balances: { denom: string; amount: string }[] }>(
+    `${rest}/cosmos/bank/v1beta1/balances/${address}`,
+    { balances: [] },
+  );
+  return data.balances || [];
+}
+
 // ─── User delegations (mstaking) ─────────────────────────────────────────────
 export interface UserDelegation {
   validatorAddress: string;
