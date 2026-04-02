@@ -130,11 +130,17 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
   }
 
   // Action intents — send / stake / bridge via natural language
-  const sendMatch = q.match(/(?:send|transfer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à)\s*(init1\S+)/);
+  const sendMatch = q.match(/(?:send|transfer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à)\s*(init1[a-z0-9]+)/);
   if (sendMatch) {
-    return `Preparing to send **${sendMatch[1]} INIT** to \`${sendMatch[2]}\`. `
-      + `Review the action card below and click **Execute** to sign with auto-sign. `
-      + `The transaction will be broadcast on Initia L1 (${network}).`;
+    const addr = sendMatch[2];
+    if (/^init1[a-z0-9]{38}$/.test(addr)) {
+      return `Preparing to send **${sendMatch[1]} INIT** to \`${addr}\`. `
+        + `Review the action card below and click **Execute** to sign with auto-sign. `
+        + `The transaction will be broadcast on Initia L1 (${network}).`;
+    }
+    return `I detect a send intent: **${sendMatch[1]} INIT** → \`${addr}\`.\n\n`
+      + `However, \`${addr}\` is not a valid Initia address. Valid addresses start with \`init1\` followed by 38 alphanumeric characters (e.g., \`init1q2v4mkjjt3gn5z8d3l7q9k6h5j8m2p1r0s9t8u\`).\n\n`
+      + `Please provide the full recipient address and I'll generate an executable action card.`;
   }
 
   const stakeMatch = q.match(/(?:stake|delegate)\s+([\d.]+)\s*(?:init)?\s*(?:on|with|to)\s+(\S+)/);

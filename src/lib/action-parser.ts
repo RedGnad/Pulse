@@ -18,9 +18,14 @@ export interface ActionIntent {
   };
 }
 
+/** Initia bech32 address: init1 + 38 alphanumeric chars */
+const VALID_INITIA_ADDR = /^init1[a-z0-9]{38}$/;
+const VALID_VALOPER_ADDR = /^initvaloper1[a-z0-9]{38}$/;
+
 /**
  * Parse a user message for actionable intents.
- * Returns null if no action detected.
+ * Only returns an action if all parameters are valid — never shows
+ * an executable card for malformed addresses.
  */
 export function parseActionIntent(
   message: string,
@@ -28,12 +33,13 @@ export function parseActionIntent(
 ): ActionIntent | null {
   const msg = message.trim();
 
-  // Send: "send 10 INIT to init1abc..."
+  // Send: "send 10 INIT to init1abc..." — only match valid bech32
   const sendMatch = msg.match(
-    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|vers|→)\s*(init1[a-z0-9]{3,})/i
+    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|vers|→)\s*(init1[a-z0-9]+)/i
   );
   if (sendMatch) {
     const [, amount, recipient] = sendMatch;
+    if (!VALID_INITIA_ADDR.test(recipient)) return null; // invalid address → no action card
     return {
       type: "send",
       chainId: "initiation-2",
@@ -52,6 +58,7 @@ export function parseActionIntent(
     const trimmed = target.trim().replace(/[.!?]+$/, "");
 
     if (trimmed.startsWith("initvaloper")) {
+      if (!VALID_VALOPER_ADDR.test(trimmed)) return null; // invalid validator address
       return {
         type: "stake",
         chainId: "initiation-2",
