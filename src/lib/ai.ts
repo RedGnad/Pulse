@@ -245,6 +245,10 @@ OVERVIEW:
 LIVE CHAINS (sorted by block height):
 ${chainDetails || "No live chain data available"}
 
+L1 VALIDATORS (${data.l1.totalValidators} active on ${data.l1.chainId}):
+${(data.l1.validators ?? []).slice(0, 20).map(v => `- ${v.moniker} (${v.operator_address}) — commission: ${(parseFloat(v.commission_rate || "0") * 100).toFixed(1)}%`).join("\n") || "No validator data"}
+Note: These are INITIA validators, not generic Cosmos validators. They validate the Initia L1.
+
 INTERWOVEN BRIDGE:
 - ${transferChannels.length} active token transfer channels between L1 and minitias
 - ${data.ibcChannels.filter((c) => c.portId === "nft-transfer").length} NFT transfer channels
