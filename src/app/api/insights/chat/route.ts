@@ -83,9 +83,15 @@ export async function POST(req: NextRequest) {
       lastUpdated: new Date().toISOString(),
     };
 
-    const augmentedMessage = walletContext ? message + walletContext : message;
+    const isMainnet = network === "mainnet";
+    const augmentedMessage = walletContext
+      ? message + walletContext
+      : isMainnet && /\b(send|stake|bridge|envoie|delegate|staker)\b/i.test(message)
+        ? message + "\n\n[SYSTEM NOTE: User is in MAINNET mode. On-chain actions (send, stake, bridge) are only available on testnet. Inform the user they need to switch to testnet mode to execute transactions.]"
+        : message;
     const response = await chatWithEcosystem(augmentedMessage, history, ecosystemData, mode === "full");
-    const action = parseActionIntent(message, ecosystemData.l1.validators);
+    // Only return executable actions on testnet
+    const action = isMainnet ? null : parseActionIntent(message, ecosystemData.l1.validators);
     return NextResponse.json({ response, action });
   } catch (error) {
     console.error("Chat error:", error);
