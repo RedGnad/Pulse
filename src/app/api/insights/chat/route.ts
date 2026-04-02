@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     const minitiasWith = await fetchAllMinitiaMetrics(minitias);
 
     // Compute Pulse Scores
-    const scores = computeAllPulseScores(minitiasWith);
+    const scores = computeAllPulseScores(minitiasWith, ibcChannels);
     for (const m of minitiasWith) {
       m.pulseScore = scores.get(m.chainId);
     }

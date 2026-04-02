@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     const minitiasWith = await fetchAllMinitiaMetrics(minitias);
 
     // Compute Pulse Scores for all minitias
-    const scores = computeAllPulseScores(minitiasWith);
+    const scores = computeAllPulseScores(minitiasWith, ibcChannels);
     for (const m of minitiasWith) {
       m.pulseScore = scores.get(m.chainId);
     }
