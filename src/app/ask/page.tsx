@@ -527,6 +527,7 @@ export default function AskPulsePage() {
                     error={txError[i]}
                     onExecute={executeAction}
                     onBridge={handleBridge}
+                    connected={isConnected}
                   />
                 )}
               </div>
@@ -1003,6 +1004,7 @@ function ActionCard({
   error,
   onExecute,
   onBridge,
+  connected,
 }: {
   action: ActionIntent;
   msgIndex: number;
@@ -1011,6 +1013,7 @@ function ActionCard({
   error?: string;
   onExecute: (action: ActionIntent, idx: number) => void;
   onBridge: () => void;
+  connected: boolean;
 }) {
   const Icon = ACTION_ICONS[action.type] ?? Zap;
   const isExecuting = status === "signing" || status === "pending";
@@ -1184,6 +1187,11 @@ function ActionCard({
               <>
                 <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
                 {status === "signing" ? "Enabling auto-sign..." : "Broadcasting..."}
+              </>
+            ) : !connected ? (
+              <>
+                <Zap style={{ width: 13, height: 13 }} />
+                Connect Wallet to Execute
               </>
             ) : (
               <>
