@@ -129,8 +129,31 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
       + `\n\nAvoid concentrating on the top 1-2 validators — the network is healthier when stake is distributed.`;
   }
 
+  // Action intents — send / stake / bridge via natural language
+  const sendMatch = q.match(/(?:send|transfer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à)\s*(init1\S+)/);
+  if (sendMatch) {
+    return `Preparing to send **${sendMatch[1]} INIT** to \`${sendMatch[2]}\`. `
+      + `Review the action card below and click **Execute** to sign with auto-sign. `
+      + `The transaction will be broadcast on Initia L1 (${network}).`;
+  }
+
+  const stakeMatch = q.match(/(?:stake|delegate)\s+([\d.]+)\s*(?:init)?\s*(?:on|with|to)\s+(\S+)/);
+  if (stakeMatch) {
+    const valName = stakeMatch[2];
+    const val = data.l1.validators?.find(v => v.moniker.toLowerCase().includes(valName.toLowerCase()));
+    return `Preparing to delegate **${stakeMatch[1]} INIT** to **${val?.moniker ?? valName}**. `
+      + (val ? `Commission: ${(parseFloat(val.commission_rate || "0") * 100).toFixed(1)}%. ` : "")
+      + `Review the action card below and click **Execute** to sign. `
+      + `There are **${data.l1.totalValidators} validators** active on ${network}.`;
+  }
+
   // Bridge questions
   if (q.includes("bridge") || q.includes("transfer") || q.includes("move") || q.includes("send")) {
+    const bridgeAmountMatch = q.match(/bridge\s+([\d.]+)\s*(?:init)?/);
+    if (bridgeAmountMatch) {
+      return `Preparing to bridge **${bridgeAmountMatch[1]} INIT** from L1 to Pulse rollup via the Interwoven Bridge. `
+        + `Review the action card below and click **Execute** to open the bridge modal.`;
+    }
     return `You can bridge INIT tokens directly from this page using the Interwoven Bridge. `
       + `The Pulse rollup (initia-pulse-1) is connected to Initia L1 via OPinit bridge.\n\n`
       + `There are currently **${data.totalIbcChannels} IBC channels** active across the ${network}. `

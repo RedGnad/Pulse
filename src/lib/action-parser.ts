@@ -30,7 +30,7 @@ export function parseActionIntent(
 
   // Send: "send 10 INIT to init1abc..."
   const sendMatch = msg.match(
-    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|vers|→)\s*(init1[a-z0-9]{38,})/i
+    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|vers|→)\s*(init1[a-z0-9]{3,})/i
   );
   if (sendMatch) {
     const [, amount, recipient] = sendMatch;
