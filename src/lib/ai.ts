@@ -114,7 +114,7 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
 
   // ── Action intents (MUST be before generic topic matchers) ──
 
-  const sendMatch = q.match(/(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|vers)\s*(init1[a-z0-9]+)/);
+  const sendMatch = q.match(/(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|a|vers)\s*(init1[a-z0-9]+)/);
   if (sendMatch) {
     const addr = sendMatch[2];
     if (/^init1[a-z0-9]{38}$/.test(addr)) {

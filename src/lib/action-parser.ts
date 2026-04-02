@@ -35,7 +35,7 @@ export function parseActionIntent(
 
   // Send: "send 10 INIT to init1abc..." — only match valid bech32
   const sendMatch = msg.match(
-    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|vers|→)\s*(init1[a-z0-9]+)/i
+    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|a|vers|→)\s*(init1[a-z0-9]+)/i
   );
   if (sendMatch) {
     const [, amount, recipient] = sendMatch;
