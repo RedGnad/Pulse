@@ -68,12 +68,13 @@ export function parseActionIntent(
       };
     }
 
-    // Resolve validator by name
+    // Resolve validator by name — only exact or strong match
     if (validators?.length) {
+      const lower = trimmed.toLowerCase();
       const val = validators.find(
-        (v) => v.moniker.toLowerCase() === trimmed.toLowerCase()
+        (v) => v.moniker.toLowerCase() === lower
       ) ?? validators.find(
-        (v) => v.moniker.toLowerCase().includes(trimmed.toLowerCase())
+        (v) => v.moniker.toLowerCase().includes(lower) || lower.includes(v.moniker.toLowerCase())
       );
       if (val) {
         return {
@@ -86,13 +87,8 @@ export function parseActionIntent(
       }
     }
 
-    return {
-      type: "stake",
-      chainId: "initiation-2",
-      label: `Stake ${amount} INIT`,
-      description: `Delegate ${amount} INIT (validator "${trimmed}" — will resolve on-chain)`,
-      params: { amount, validatorName: trimmed },
-    };
+    // Validator not found — no action card (AI response will guide the user)
+    return null;
   }
 
   // Bridge: "bridge 10 INIT to pulse" / "bridge 5 INIT"

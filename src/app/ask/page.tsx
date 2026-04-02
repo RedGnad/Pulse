@@ -117,13 +117,32 @@ const CATEGORIES = [
   },
 ];
 
+function friendlyTxError(raw: string): string {
+  const r = raw.toLowerCase();
+  if (r.includes("invalid to address") || r.includes("invalid address"))
+    return "Invalid recipient address. Please check the init1... address and try again.";
+  if (r.includes("insufficient fund") || r.includes("insufficient balance"))
+    return "Insufficient balance. You don't have enough INIT for this transaction.";
+  if (r.includes("out of gas") || r.includes("gas cannot be zero"))
+    return "Transaction ran out of gas. Please try again.";
+  if (r.includes("user rejected") || r.includes("user denied") || r.includes("user cancel"))
+    return "Transaction cancelled.";
+  if (r.includes("sequence mismatch") || r.includes("account sequence"))
+    return "Sequence error — please wait a few seconds and try again.";
+  if (r.includes("not found") && r.includes("validator"))
+    return "Validator not found on the network. Check the validator name or address.";
+  if (r.includes("collections: not found"))
+    return "Authorization error. Try disconnecting your wallet, reconnecting, and enabling auto-sign again.";
+  return raw.length > 120 ? raw.slice(0, 120) + "…" : raw;
+}
+
 export default function AskPulsePage() {
   const [chat, setChat] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { openBridge, requestTxBlock, autoSign, initiaAddress, isConnected, openConnect } = useInterwovenKit();
+  const { openBridge, requestTxSync, autoSign, initiaAddress, isConnected, openConnect } = useInterwovenKit();
   const { data: ecosystem } = useEcosystem();
   const { network } = useNetwork();
   const [txStatus, setTxStatus] = useState<Record<number, "idle" | "signing" | "pending" | "success" | "error">>({});
@@ -160,6 +179,7 @@ export default function AskPulsePage() {
             history: chat.map((m) => ({ role: m.role, content: m.content })),
             mode: "full",
             network,
+            userAddress: initiaAddress || undefined,
           }),
         });
         const json = await res.json();
@@ -200,17 +220,6 @@ export default function AskPulsePage() {
 
     try {
       const chainId = action.chainId || "initiation-2";
-
-      // Try to enable auto-sign — gracefully fall back to normal tx signing
-      // (auto-sign may fail on hosted deployments where the local rollup REST is unreachable)
-      try {
-        if (!autoSign?.isEnabledByChain?.[chainId]) {
-          await autoSign?.enable(chainId);
-        }
-      } catch {
-        // Auto-sign unavailable — requestTxBlock will show a normal confirmation popup
-      }
-
       const amountMicro = String(Math.floor(parseFloat(action.params.amount || "0") * 1_000_000));
 
       let messages: { typeUrl: string; value: unknown }[];
@@ -231,26 +240,42 @@ export default function AskPulsePage() {
           return;
         }
         messages = [{
-          typeUrl: "/cosmos.staking.v1beta1.MsgDelegate",
+          typeUrl: "/initia.mstaking.v1.MsgDelegate",
           value: {
             delegatorAddress: initiaAddress,
             validatorAddress: action.params.validator,
-            amount: { denom: "uinit", amount: amountMicro },
+            amount: [{ denom: "uinit", amount: amountMicro }],
           },
         }];
       } else {
         return;
       }
 
+      // Enable auto-sign session for this chain if not already active
+      if (!autoSign?.isEnabledByChain?.[chainId]) {
+        await autoSign?.enable(chainId);
+      }
+
+      const isAutoSignActive = !!autoSign?.isEnabledByChain?.[chainId];
+
       setTxStatus(prev => ({ ...prev, [msgIndex]: "pending" }));
-      const result = await requestTxBlock({ messages, chainId });
-      setTxHash(prev => ({ ...prev, [msgIndex]: result.transactionHash }));
+      // requestTxSync with autoSign flag — SDK handles gas estimation,
+      // skips modal when autoSign is true (official BlockForge pattern)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const txHash = await (requestTxSync as any)({
+        messages,
+        chainId,
+        autoSign: isAutoSignActive,
+        feeDenom: isAutoSignActive ? "uinit" : undefined,
+      });
+      setTxHash(prev => ({ ...prev, [msgIndex]: txHash }));
       setTxStatus(prev => ({ ...prev, [msgIndex]: "success" }));
     } catch (err) {
       setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
-      setTxError(prev => ({ ...prev, [msgIndex]: err instanceof Error ? err.message : "Transaction failed" }));
+      const raw = err instanceof Error ? err.message : "Transaction failed";
+      setTxError(prev => ({ ...prev, [msgIndex]: friendlyTxError(raw) }));
     }
-  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxBlock]);
+  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxSync]);
 
   const lastMsg = chat.length > 0 ? chat[chat.length - 1] : null;
   const showBridgeAction =

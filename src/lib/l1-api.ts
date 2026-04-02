@@ -102,6 +102,37 @@ export async function fetchValidators(network?: NetworkMode): Promise<{ validato
   };
 }
 
+// ─── User delegations (mstaking) ─────────────────────────────────────────────
+export interface UserDelegation {
+  validatorAddress: string;
+  validatorMoniker: string;
+  amount: string;
+  denom: string;
+}
+
+export async function fetchUserDelegations(
+  address: string,
+  validators: L1Validator[],
+  network?: NetworkMode,
+): Promise<UserDelegation[]> {
+  const { rest } = getL1Urls(network);
+  const data = await apiFetchSafe<{ delegation_responses: unknown[] }>(
+    `${rest}/initia/mstaking/v1/delegations/${address}`,
+    { delegation_responses: [] },
+  );
+  const monikerMap = new Map(validators.map((v) => [v.operator_address, v.moniker]));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data.delegation_responses || []).flatMap((d: any) => {
+    const valAddr = d.delegation?.validator_address ?? "";
+    return (d.balance || []).map((b: { denom: string; amount: string }) => ({
+      validatorAddress: valAddr,
+      validatorMoniker: monikerMap.get(valAddr) ?? valAddr.slice(0, 20) + "…",
+      amount: b.amount,
+      denom: b.denom,
+    }));
+  });
+}
+
 // ─── OPinit Bridges (the Interwoven Bridge data) ──────────────────────────────
 export async function fetchBridges(network?: NetworkMode): Promise<OpinitBridge[]> {
   const { rest } = getL1Urls(network);

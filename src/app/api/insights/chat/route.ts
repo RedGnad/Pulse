@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchEcosystemData } from "@/lib/initia-registry";
 import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
-import { fetchL1Data } from "@/lib/l1-api";
+import { fetchL1Data, fetchUserDelegations } from "@/lib/l1-api";
 import { chatWithEcosystem } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { message, history = [], mode = "widget", network: networkParam } = await req.json();
+    const { message, history = [], mode = "widget", network: networkParam, userAddress } = await req.json();
     if (!message?.trim()) return NextResponse.json({ error: "Empty message" }, { status: 400 });
 
     const network = (networkParam ?? "testnet") as NetworkMode;
@@ -24,6 +24,24 @@ export async function POST(req: NextRequest) {
       fetchEcosystemData(network),
       fetchL1Data(network),
     ]);
+
+    // Fetch user's staking delegations if they ask about their funds
+    const isWalletQuery = /\b(my|mes|mon|ma|nos|notre)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init)\b/i.test(message)
+      || /\b(staké|staked|délégué|delegated)\b/i.test(message)
+      || /\b(where|où|combien).*(stak|fond|fund|init)/i.test(message);
+    let walletContext = "";
+    if (isWalletQuery && userAddress) {
+      const delegations = await fetchUserDelegations(userAddress, l1Raw.validators, network);
+      if (delegations.length > 0) {
+        const lines = delegations.map(d => {
+          const amt = (parseFloat(d.amount) / 1_000_000).toFixed(2);
+          return `- ${amt} ${d.denom === "uinit" ? "INIT" : d.denom} staked on **${d.validatorMoniker}**`;
+        });
+        walletContext = `\n\n[USER WALLET DATA — address: ${userAddress}]\nStaking positions:\n${lines.join("\n")}\n`;
+      } else {
+        walletContext = `\n\n[USER WALLET DATA — address: ${userAddress}]\nNo active staking positions found.\n`;
+      }
+    }
     const minitiasWith = await fetchAllMinitiaMetrics(minitias);
 
     // Compute Pulse Scores
@@ -51,7 +69,8 @@ export async function POST(req: NextRequest) {
       lastUpdated: new Date().toISOString(),
     };
 
-    const response = await chatWithEcosystem(message, history, ecosystemData, mode === "full");
+    const augmentedMessage = walletContext ? message + walletContext : message;
+    const response = await chatWithEcosystem(augmentedMessage, history, ecosystemData, mode === "full");
     const action = parseActionIntent(message, ecosystemData.l1.validators);
     return NextResponse.json({ response, action });
   } catch (error) {

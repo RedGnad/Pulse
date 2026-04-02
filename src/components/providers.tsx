@@ -44,7 +44,7 @@ const pulseChain = {
   },
   staking: { staking_tokens: [{ denom: PULSE_DENOM }] },
   native_assets: [{ denom: PULSE_DENOM, name: "Pulse", symbol: "PULSE", decimals: 18 }],
-  metadata: { is_l1: false, minitia: { type: "minievm" } },
+  metadata: { is_l1: false },
 };
 
 export function Providers({ children }: { children: React.ReactNode }) {
@@ -62,7 +62,19 @@ export function Providers({ children }: { children: React.ReactNode }) {
           {...TESTNET}
           defaultChainId={PULSE_CHAIN_ID}
           customChain={pulseChain}
-          enableAutoSign={true}
+          enableAutoSign={{
+            "initiation-2": [
+              "/cosmos.bank.v1beta1.MsgSend",
+              "/initia.mstaking.v1.MsgDelegate",
+            ],
+            [PULSE_CHAIN_ID]: [
+              "/minievm.evm.v1.MsgCall",
+            ],
+          }}
+          autoSignFeePolicy={{
+            "initiation-2": { allowedFeeDenoms: ["uinit"] },
+            [PULSE_CHAIN_ID]: { allowedFeeDenoms: [PULSE_DENOM] },
+          }}
         >
           <NetworkProvider>
             {mounted ? children : null}
