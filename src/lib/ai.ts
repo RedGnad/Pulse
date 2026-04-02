@@ -112,6 +112,52 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
   const network = data.l1.chainId.includes("interwoven") ? "mainnet" : "testnet";
   const q = (message ?? "").toLowerCase();
 
+  // ── Action intents (MUST be before generic topic matchers) ──
+
+  const sendMatch = q.match(/(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|vers)\s*(init1[a-z0-9]+)/);
+  if (sendMatch) {
+    const addr = sendMatch[2];
+    if (/^init1[a-z0-9]{38}$/.test(addr)) {
+      return `Preparing to send **${sendMatch[1]} INIT** to \`${addr}\`. `
+        + `Review the action card below and click **Execute** to sign with auto-sign. `
+        + `The transaction will be broadcast on Initia L1 (${network}).`;
+    }
+    return `The address \`${addr}\` doesn't look valid — Initia addresses are \`init1\` followed by 38 alphanumeric characters.\n\n`
+      + `Please double-check and try again.`;
+  }
+
+  const stakeMatch = q.match(/(?:stake|delegate|staker|déléguer)\s+([\d.]+)\s*(?:init)?\s*(?:on|with|to|sur|avec|à)\s+(.+)/i);
+  if (stakeMatch) {
+    const valName = stakeMatch[2].trim().replace(/[.!?]+$/, "");
+    const val = data.l1.validators?.find(v => v.moniker.toLowerCase().includes(valName.toLowerCase()));
+    return `Preparing to delegate **${stakeMatch[1]} INIT** to **${val?.moniker ?? valName}**. `
+      + (val ? `Commission: ${(parseFloat(val.commission_rate || "0") * 100).toFixed(1)}%. ` : "")
+      + `Review the action card below and click **Execute** to sign. `
+      + `There are **${data.l1.totalValidators} validators** active on ${network}.`;
+  }
+
+  const bridgeAmountMatch = q.match(/(?:bridge|pont|transférer)\s+([\d.]+)\s*(?:init)?/);
+  if (bridgeAmountMatch) {
+    return `Preparing to bridge **${bridgeAmountMatch[1]} INIT** from L1 via the Interwoven Bridge. `
+      + `Review the action card below and click **Open Bridge** to select a destination chain.`;
+  }
+
+  // ── Wallet / personal fund queries ──
+
+  const isWalletQuery = /\b(my|mes|mon|ma|nos|notre|a.t.on)\b.*\b(fund|fond|stak|delega|balanc|solde|token|init)\b/i.test(q)
+    || /\b(where|où|combien).*(stak|fond|fund|init)/i.test(q);
+  if (isWalletQuery) {
+    // The chat route injects [USER WALLET DATA] into the message when available.
+    // If wallet data is present in the message, the AI (or this mock) should use it.
+    if (q.includes("[user wallet data")) {
+      const walletSection = (message ?? "").match(/\[USER WALLET DATA[^\]]*\]([\s\S]*?)$/i);
+      if (walletSection) return `Here's what I found for your wallet:\n\n${walletSection[1].trim()}`;
+    }
+    return `To check your staking positions, connect your wallet first. Once connected, I can query your delegations on Initia L1 and show you exactly where your INIT is staked.`;
+  }
+
+  // ── Generic topic questions ──
+
   // Deploy questions
   if (q.includes("deploy") || q.includes("build") || q.includes("launch") || q.includes("where should")) {
     const top3 = byScore.slice(0, 3);
@@ -120,50 +166,22 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
       + `\n\n${top3[0]?.prettyName} leads with the best combination of activity, decentralization, and IBC connectivity. For DeFi apps specifically, fast block time matters most — ${byBlockTime[0]?.prettyName} has the fastest at ${byBlockTime[0]?.metrics?.avgBlockTime?.toFixed(1)}s.`;
   }
 
-  // Staking questions
+  // Staking questions (generic — no amount/validator specified)
   if (q.includes("stak") || q.includes("validator") || q.includes("delegate")) {
     const vals = data.l1.validators?.slice(0, 3) ?? [];
     return `There are **${data.l1.totalValidators} validators** on Initia ${network}. `
       + `For a balanced staking strategy, consider splitting across mid-tier validators to support decentralization.\n\n`
       + (vals.length > 0 ? `Top validators by voting power: ${vals.map(v => `**${v.moniker}** (${(parseFloat(v.commission_rate || "0") * 100).toFixed(0)}% commission)`).join(", ")}.` : "")
-      + `\n\nAvoid concentrating on the top 1-2 validators — the network is healthier when stake is distributed.`;
+      + `\n\nAvoid concentrating on the top 1-2 validators — the network is healthier when stake is distributed.`
+      + `\n\nYou can stake directly from here — try: "stake 10 INIT on Chorus One"`;
   }
 
-  // Action intents — send / stake / bridge via natural language
-  const sendMatch = q.match(/(?:send|transfer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à)\s*(init1[a-z0-9]+)/);
-  if (sendMatch) {
-    const addr = sendMatch[2];
-    if (/^init1[a-z0-9]{38}$/.test(addr)) {
-      return `Preparing to send **${sendMatch[1]} INIT** to \`${addr}\`. `
-        + `Review the action card below and click **Execute** to sign with auto-sign. `
-        + `The transaction will be broadcast on Initia L1 (${network}).`;
-    }
-    return `I detect a send intent: **${sendMatch[1]} INIT** → \`${addr}\`.\n\n`
-      + `However, \`${addr}\` is not a valid Initia address. Valid addresses start with \`init1\` followed by 38 alphanumeric characters (e.g., \`init1q2v4mkjjt3gn5z8d3l7q9k6h5j8m2p1r0s9t8u\`).\n\n`
-      + `Please provide the full recipient address and I'll generate an executable action card.`;
-  }
-
-  const stakeMatch = q.match(/(?:stake|delegate)\s+([\d.]+)\s*(?:init)?\s*(?:on|with|to)\s+(\S+)/);
-  if (stakeMatch) {
-    const valName = stakeMatch[2];
-    const val = data.l1.validators?.find(v => v.moniker.toLowerCase().includes(valName.toLowerCase()));
-    return `Preparing to delegate **${stakeMatch[1]} INIT** to **${val?.moniker ?? valName}**. `
-      + (val ? `Commission: ${(parseFloat(val.commission_rate || "0") * 100).toFixed(1)}%. ` : "")
-      + `Review the action card below and click **Execute** to sign. `
-      + `There are **${data.l1.totalValidators} validators** active on ${network}.`;
-  }
-
-  // Bridge questions
-  if (q.includes("bridge") || q.includes("transfer") || q.includes("move") || q.includes("send")) {
-    const bridgeAmountMatch = q.match(/bridge\s+([\d.]+)\s*(?:init)?/);
-    if (bridgeAmountMatch) {
-      return `Preparing to bridge **${bridgeAmountMatch[1]} INIT** from L1 to Pulse rollup via the Interwoven Bridge. `
-        + `Review the action card below and click **Execute** to open the bridge modal.`;
-    }
+  // Bridge questions (generic)
+  if (q.includes("bridge") || (q.includes("transfer") && !sendMatch) || q.includes("move") || q.includes("send")) {
     return `You can bridge INIT tokens directly from this page using the Interwoven Bridge. `
       + `The Pulse rollup (initia-pulse-1) is connected to Initia L1 via OPinit bridge.\n\n`
       + `There are currently **${data.totalIbcChannels} IBC channels** active across the ${network}. `
-      + `Click the Bridge button to start a transfer.`;
+      + `Try: "bridge 5 INIT" to get started.`;
   }
 
   // Health / status questions
