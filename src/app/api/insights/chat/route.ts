@@ -5,6 +5,7 @@ import { fetchL1Data } from "@/lib/l1-api";
 import { chatWithEcosystem } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
+import { parseActionIntent } from "@/lib/action-parser";
 import type { NetworkMode } from "@/contexts/network-context";
 
 export async function POST(req: NextRequest) {
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
     };
 
     const response = await chatWithEcosystem(message, history, ecosystemData, mode === "full");
-    return NextResponse.json({ response });
+    const action = parseActionIntent(message, ecosystemData.l1.validators);
+    return NextResponse.json({ response, action });
   } catch (error) {
     console.error("Chat error:", error);
     return NextResponse.json({ error: "Failed to process query" }, { status: 500 });

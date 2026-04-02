@@ -62,6 +62,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
           {...TESTNET}
           defaultChainId={PULSE_CHAIN_ID}
           customChain={pulseChain}
+          enableAutoSign={true}
         >
           <NetworkProvider>
             {mounted ? children : null}

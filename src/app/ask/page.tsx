@@ -11,16 +11,22 @@ import {
   Shield,
   BarChart3,
   Activity,
+  CheckCircle2,
+  XCircle,
+  Coins,
+  Lock,
 } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
 import { useEcosystem } from "@/hooks/use-ecosystem";
 import { useNetwork } from "@/contexts/network-context";
 import { scoreColor } from "@/lib/pulse-score";
+import type { ActionIntent } from "@/lib/action-parser";
 
 interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   timestamp: number;
+  action?: ActionIntent | null;
 }
 
 /** Lightweight markdown renderer for AI responses — handles **bold**, line breaks */
@@ -117,9 +123,12 @@ export default function AskPulsePage() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { openBridge } = useInterwovenKit();
+  const { openBridge, requestTxBlock, autoSign, initiaAddress, isConnected, openConnect } = useInterwovenKit();
   const { data: ecosystem } = useEcosystem();
   const { network } = useNetwork();
+  const [txStatus, setTxStatus] = useState<Record<number, "idle" | "signing" | "pending" | "success" | "error">>({});
+  const [txHash, setTxHash] = useState<Record<number, string>>({});
+  const [txError, setTxError] = useState<Record<number, string>>({});
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -157,7 +166,7 @@ export default function AskPulsePage() {
         const response = json.response || json.error;
         setChat([
           ...newChat,
-          { role: "assistant", content: response, timestamp: Date.now() },
+          { role: "assistant", content: response, timestamp: Date.now(), action: json.action ?? null },
         ]);
       } catch {
         setChat([
@@ -179,9 +188,67 @@ export default function AskPulsePage() {
     openBridge({ srcChainId: "initiation-2", srcDenom: "uinit" });
   }
 
+  const executeAction = useCallback(async (action: ActionIntent, msgIndex: number) => {
+    if (!isConnected) { openConnect(); return; }
+
+    if (action.type === "bridge") {
+      openBridge({ srcChainId: "initiation-2", srcDenom: "uinit" });
+      return;
+    }
+
+    setTxStatus(prev => ({ ...prev, [msgIndex]: "signing" }));
+
+    try {
+      // Enable auto-sign for L1 if not already
+      const chainId = action.chainId || "initiation-2";
+      if (!autoSign?.isEnabledByChain?.[chainId]) {
+        await autoSign?.enable(chainId);
+      }
+
+      const amountMicro = String(Math.floor(parseFloat(action.params.amount || "0") * 1_000_000));
+
+      let messages: { typeUrl: string; value: unknown }[];
+
+      if (action.type === "send") {
+        messages = [{
+          typeUrl: "/cosmos.bank.v1beta1.MsgSend",
+          value: {
+            fromAddress: initiaAddress,
+            toAddress: action.params.recipient,
+            amount: [{ denom: "uinit", amount: amountMicro }],
+          },
+        }];
+      } else if (action.type === "stake") {
+        if (!action.params.validator) {
+          setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
+          setTxError(prev => ({ ...prev, [msgIndex]: "Validator address not resolved. Use a full initvaloper address." }));
+          return;
+        }
+        messages = [{
+          typeUrl: "/cosmos.staking.v1beta1.MsgDelegate",
+          value: {
+            delegatorAddress: initiaAddress,
+            validatorAddress: action.params.validator,
+            amount: { denom: "uinit", amount: amountMicro },
+          },
+        }];
+      } else {
+        return;
+      }
+
+      setTxStatus(prev => ({ ...prev, [msgIndex]: "pending" }));
+      const result = await requestTxBlock({ messages, chainId });
+      setTxHash(prev => ({ ...prev, [msgIndex]: result.transactionHash }));
+      setTxStatus(prev => ({ ...prev, [msgIndex]: "success" }));
+    } catch (err) {
+      setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
+      setTxError(prev => ({ ...prev, [msgIndex]: err instanceof Error ? err.message : "Transaction failed" }));
+    }
+  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxBlock]);
+
   const lastMsg = chat.length > 0 ? chat[chat.length - 1] : null;
   const showBridgeAction =
-    lastMsg?.role === "assistant" && /bridge|transfer|move.*init/i.test(lastMsg.content);
+    lastMsg?.role === "assistant" && !lastMsg.action && /bridge|transfer|move.*init/i.test(lastMsg.content);
 
   const hasMessages = chat.length > 0;
 
@@ -448,10 +515,24 @@ export default function AskPulsePage() {
             </div>
 
             {chat.map((m, i) => (
-              <MessageBubble key={i} msg={m} />
+              <div key={i}>
+                <MessageBubble msg={m} />
+                {/* Action card for this message */}
+                {m.action && m.role === "assistant" && (
+                  <ActionCard
+                    action={m.action}
+                    msgIndex={i}
+                    status={txStatus[i] ?? "idle"}
+                    hash={txHash[i]}
+                    error={txError[i]}
+                    onExecute={executeAction}
+                    onBridge={handleBridge}
+                  />
+                )}
+              </div>
             ))}
 
-            {/* Bridge action */}
+            {/* Legacy bridge action (for messages without structured action) */}
             {showBridgeAction && (
               <div style={{ display: "flex", paddingLeft: 44 }}>
                 <button
@@ -901,6 +982,217 @@ function MessageBubble({ msg }: { msg: ChatMsg }) {
             {renderMarkdown(msg.content)}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Action Card ──────────────────────────────────────────────────────────── */
+
+const ACTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement> & { style?: React.CSSProperties }>> = {
+  send: Coins,
+  stake: Lock,
+  bridge: ArrowLeftRight,
+};
+
+function ActionCard({
+  action,
+  msgIndex,
+  status,
+  hash,
+  error,
+  onExecute,
+  onBridge,
+}: {
+  action: ActionIntent;
+  msgIndex: number;
+  status: "idle" | "signing" | "pending" | "success" | "error";
+  hash?: string;
+  error?: string;
+  onExecute: (action: ActionIntent, idx: number) => void;
+  onBridge: () => void;
+}) {
+  const Icon = ACTION_ICONS[action.type] ?? Zap;
+  const isExecuting = status === "signing" || status === "pending";
+
+  return (
+    <div style={{ paddingLeft: 44, marginTop: 8 }}>
+      <div
+        style={{
+          padding: "14px 18px",
+          borderRadius: 10,
+          background: status === "success"
+            ? "rgba(0,255,136,0.04)"
+            : status === "error"
+            ? "rgba(255,60,60,0.04)"
+            : "rgba(0,255,136,0.02)",
+          border: `1px solid ${
+            status === "success"
+              ? "rgba(0,255,136,0.25)"
+              : status === "error"
+              ? "rgba(255,60,60,0.2)"
+              : "rgba(0,255,136,0.12)"
+          }`,
+          maxWidth: 420,
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 6,
+              background: "rgba(0,255,136,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon style={{ width: 12, height: 12, color: "#00FF88" }} />
+          </div>
+          <span
+            style={{
+              fontFamily: "var(--font-chakra), sans-serif",
+              fontSize: 13,
+              fontWeight: 600,
+              color: "#E0F0FF",
+            }}
+          >
+            {action.label}
+          </span>
+          {action.type !== "bridge" && (
+            <span
+              style={{
+                fontFamily: "var(--font-jetbrains), monospace",
+                fontSize: 10,
+                color: "#3A5A6A",
+                padding: "2px 6px",
+                borderRadius: 4,
+                background: "rgba(0,255,136,0.04)",
+                border: "1px solid rgba(0,255,136,0.08)",
+              }}
+            >
+              AUTO-SIGN
+            </span>
+          )}
+        </div>
+
+        {/* Description */}
+        <p
+          style={{
+            fontFamily: "var(--font-jetbrains), monospace",
+            fontSize: 12,
+            color: "#5A7A8A",
+            margin: "0 0 12px",
+            lineHeight: 1.5,
+          }}
+        >
+          {action.description}
+        </p>
+
+        {/* Status / button */}
+        {status === "success" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <CheckCircle2 style={{ width: 14, height: 14, color: "#00FF88" }} />
+            <span
+              style={{
+                fontFamily: "var(--font-jetbrains), monospace",
+                fontSize: 12,
+                color: "#00FF88",
+              }}
+            >
+              Transaction confirmed
+            </span>
+            {hash && (
+              <a
+                href={`https://scan.testnet.initia.xyz/initiation-2/txs/${hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontFamily: "var(--font-jetbrains), monospace",
+                  fontSize: 11,
+                  color: "#5A7A8A",
+                  textDecoration: "underline",
+                }}
+              >
+                {hash.slice(0, 8)}...
+              </a>
+            )}
+          </div>
+        ) : status === "error" ? (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <XCircle style={{ width: 14, height: 14, color: "#FF3C3C" }} />
+              <span
+                style={{
+                  fontFamily: "var(--font-jetbrains), monospace",
+                  fontSize: 12,
+                  color: "#FF3C3C",
+                }}
+              >
+                Failed
+              </span>
+            </div>
+            {error && (
+              <p
+                style={{
+                  fontFamily: "var(--font-jetbrains), monospace",
+                  fontSize: 11,
+                  color: "#5A4A4A",
+                  margin: 0,
+                  wordBreak: "break-word",
+                }}
+              >
+                {error.length > 120 ? error.slice(0, 120) + "..." : error}
+              </p>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => action.type === "bridge" ? onBridge() : onExecute(action, msgIndex)}
+            disabled={isExecuting}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 16px",
+              borderRadius: 6,
+              background: isExecuting ? "rgba(0,255,136,0.04)" : "rgba(0,255,136,0.1)",
+              border: "1px solid rgba(0,255,136,0.2)",
+              cursor: isExecuting ? "wait" : "pointer",
+              fontFamily: "var(--font-jetbrains), monospace",
+              fontSize: 12,
+              fontWeight: 600,
+              color: "#00FF88",
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              if (!isExecuting) {
+                e.currentTarget.style.background = "rgba(0,255,136,0.18)";
+                e.currentTarget.style.borderColor = "rgba(0,255,136,0.35)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isExecuting) {
+                e.currentTarget.style.background = "rgba(0,255,136,0.1)";
+                e.currentTarget.style.borderColor = "rgba(0,255,136,0.2)";
+              }
+            }}
+          >
+            {isExecuting ? (
+              <>
+                <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
+                {status === "signing" ? "Enabling auto-sign..." : "Broadcasting..."}
+              </>
+            ) : (
+              <>
+                <Zap style={{ width: 13, height: 13 }} />
+                {action.type === "bridge" ? "Open Bridge" : "Execute"}
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );

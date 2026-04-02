@@ -12,7 +12,9 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 
 - **The Custom Implementation**: PulseOracle is a composable Solidity contract deployed on a dedicated MiniEVM rollup (`initia-pulse-1`). Every 5 minutes, an AI agent analyzes live data from 13+ minitias, 19 validators, and all IBC channels, then writes a compressed ecosystem snapshot on-chain — including a `dataHash` (keccak256 commitment) for integrity verification. The contract exposes DeFi-composable primitives: `isHealthy(minHealth, minStreak)` lets any lending protocol gate operations on ecosystem stability, `healthStreak()` enables risk scoring, and a multi-writer role system (`setWriter`) allows multiple AI agents to contribute. The frontend provides real-time dashboards, an AI advisor for deploy/stake/bridge decisions, and a full oracle history explorer.
 
-- **The Native Feature**: The Interwoven Bridge is integrated via InterwovenKit's `openBridge` hook, allowing users to bridge INIT tokens from L1 (initiation-2) directly to the Pulse rollup. The bridge is accessible from 5 entry points: the bridge widget, Ask Pulse chat (contextual), floating chat, wallet portfolio, and chain detail panel.
+- **Native Features** (2):
+  - **Interwoven Bridge**: Integrated via InterwovenKit's `openBridge` hook, allowing users to bridge INIT tokens from L1 (initiation-2) directly to the Pulse rollup. Accessible from 5 entry points: bridge widget, Ask Pulse chat, floating chat, wallet portfolio, and chain detail panel.
+  - **Auto-Signing Actions**: Ask Pulse supports natural language transaction execution. Users can type "send 10 INIT to init1...", "stake 50 INIT on [validator]", or "bridge 5 INIT" — the AI parses the intent, shows a confirmation card, and executes via InterwovenKit's `requestTxBlock` with auto-signing enabled. No wallet popups after initial session approval.
 
 ### How to Run Locally
 
@@ -31,6 +33,19 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
    ```
 
 4. **Open `http://localhost:3000`** — connect your wallet via InterwovenKit, explore the dashboard, oracle snapshots, AI advisor, and bridge.
+
+### Local Dev Limitation
+
+The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not registered on the Initia explorer or bridge UI**. This is a [known limitation for local rollups](https://docs.initia.xyz/hackathon/examples/evm-bank#-native-feature-interwoven-bridge).
+
+**What this means in practice:**
+
+- The **Interwoven Bridge** is fully implemented in code via InterwovenKit's `openBridge()` hook (5 integration points across the app), but the bridge modal won't list `initia-pulse-1` as a destination on the public bridge UI.
+- **This does not affect core functionality.** Pulse's value is read-only intelligence: the AI agent writes oracle snapshots using a backend signer key, and all dashboards, AI advisor, and chat features work independently of user-bridged assets. No user needs to bridge tokens to use Pulse.
+- **Auto-sign actions (send, stake) execute on L1 testnet** (initiation-2) and work on the live site regardless of the local rollup limitation.
+- **Intended production flow:** In a registered rollup scenario, users would bridge INIT from L1 → Pulse rollup via the bridge widget, then interact with the PulseOracle contract directly. The bridge integration is ready for this — it just requires chain registration on the Initia bridge UI.
+
+**Live demo:** [initiapulse.vercel.app](https://initiapulse.vercel.app) — the full app runs with cached oracle data and AI insights. The rollup + oracle write flow is demonstrated in the [demo video](https://youtu.be/r3Uz-rFKzm0).
 
 ---
 
@@ -96,20 +111,4 @@ AI_API_KEY=lm-studio
 - **Contract**: Solidity ^0.8.24, deployed with Foundry
 - **Frontend**: Next.js 16, TypeScript, InterwovenKit v2, wagmi, TanStack Query
 - **AI**: Multi-provider (Anthropic, OpenAI, Ollama, LM Studio, Groq, or any OpenAI-compatible API), built for multi-agentic analysis
-- **Native Feature**: Interwoven Bridge via `openBridge()`
-
----
-
-### ⚠️ Local Dev Limitation
-
-The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not registered on the Initia explorer or bridge UI**. This is a limitation for local rollups](https://docs.initia.xyz/hackathon/examples/evm-bank#-native-feature-interwoven-bridge).
-
-**What this means:**
-
-- The **Interwoven Bridge** is fully implemented in code via InterwovenKit's `openBridge()` hook (5 integration points across the app), but the bridge modal won't list `initia-pulse-1` as a destination on the public bridge UI.
-- **This does not affect core functionality.** Pulse's value is read-only intelligence: the AI agent writes oracle snapshots using a backend signer key, and all dashboards, AI advisor, and chat features work independently of user-bridged assets. No user needs to bridge tokens to use Pulse.
-- **Intended production flow:** In a registered rollup scenario, users would bridge INIT from L1 → Pulse rollup via the bridge widget, then interact with the PulseOracle contract directly. The bridge integration is ready for this — it just requires chain registration on the Initia bridge UI.
-
-**Live demo:** [initiapulse.vercel.app](https://initiapulse.vercel.app) — the full app runs with cached oracle data and AI insights. The rollup + oracle write flow is demonstrated in the [demo video](https://youtu.be/r3Uz-rFKzm0).
-
----
+- **Native Features**: Interwoven Bridge via `openBridge()` + Auto-Signing via `requestTxBlock` with natural language intent parsing

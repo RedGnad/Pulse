@@ -5,7 +5,7 @@
   "rollup_chain_id": "initia-pulse-1",
   "deployed_address": "0xc09F200B0d98ca2b21761aFA191FEdb55a9AA4B4",
   "vm": "evm",
-  "native_feature": "interwoven-bridge",
+  "native_feature": "interwoven-bridge, auto-signing",
   "core_logic_path": "contracts/PulseOracle.sol",
   "native_feature_frontend_path": "src/components/bridge/bridge-widget.tsx",
   "demo_video_url": "https://youtu.be/r3Uz-rFKzm0"
