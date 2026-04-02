@@ -199,10 +199,16 @@ export default function AskPulsePage() {
     setTxStatus(prev => ({ ...prev, [msgIndex]: "signing" }));
 
     try {
-      // Enable auto-sign for L1 if not already
       const chainId = action.chainId || "initiation-2";
-      if (!autoSign?.isEnabledByChain?.[chainId]) {
-        await autoSign?.enable(chainId);
+
+      // Try to enable auto-sign — gracefully fall back to normal tx signing
+      // (auto-sign may fail on hosted deployments where the local rollup REST is unreachable)
+      try {
+        if (!autoSign?.isEnabledByChain?.[chainId]) {
+          await autoSign?.enable(chainId);
+        }
+      } catch {
+        // Auto-sign unavailable — requestTxBlock will show a normal confirmation popup
       }
 
       const amountMicro = String(Math.floor(parseFloat(action.params.amount || "0") * 1_000_000));
@@ -1186,7 +1192,7 @@ function ActionCard({
             {isExecuting ? (
               <>
                 <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
-                {status === "signing" ? "Enabling auto-sign..." : "Broadcasting..."}
+                {status === "signing" ? "Preparing transaction..." : "Broadcasting..."}
               </>
             ) : !connected ? (
               <>
