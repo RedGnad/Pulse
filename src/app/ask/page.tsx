@@ -112,7 +112,7 @@ const CATEGORIES = [
     label: "Data",
     questions: [
       "Total transactions across all minitias",
-      "IBC channel activity summary",
+      "Send 0.1 INIT to init18wahzdxxcaz36d53060alequs747ydfrej6mdm",
       "How many validators are active on L1?",
     ],
   },
