@@ -75,18 +75,36 @@ const CATEGORIES = [
     icon: TrendingUp,
     label: "Staking",
     questions: [
-      "Best validators to stake with for a balanced portfolio?",
       "Stake 1 INIT on Chorus One",
+      "Best validators to stake with for a balanced portfolio?",
       "Which validators have the lowest commission?",
     ],
   },
   {
     icon: ArrowLeftRight,
-    label: "Bridge & Send",
+    label: "Bridge",
     questions: [
-      "How do I bridge INIT to the Pulse rollup?",
-      "Show me active bridge channels and their status",
+      "Bridge 5 INIT to Pulse rollup",
       "What's the fastest bridge path between minitias?",
+      "Show me active bridge channels and their status",
+    ],
+  },
+  {
+    icon: Shield,
+    label: "Security",
+    questions: [
+      "Which minitias have oracle-enabled bridges?",
+      "What's the finalization period for OPinit bridges?",
+      "Any validator centralization concerns?",
+    ],
+  },
+  {
+    icon: Zap,
+    label: "Deploy",
+    questions: [
+      "Where should I deploy a DeFi app on Initia?",
+      "Compare minitia block times and throughput",
+      "Which rollups support Celestia DA?",
     ],
   },
   {
@@ -94,8 +112,8 @@ const CATEGORIES = [
     label: "Data",
     questions: [
       "Total transactions across all minitias",
-      "How many validators are active on L1?",
       "IBC channel activity summary",
+      "How many validators are active on L1?",
     ],
   },
 ];
@@ -325,7 +343,7 @@ export default function AskPulsePage() {
               justifyContent: "flex-start",
               alignItems: "center",
               paddingTop: 40,
-              paddingBottom: 140,
+              paddingBottom: 180,
               overflowY: "auto",
               animation: "fade-in 0.6s ease-out",
             }}
@@ -469,7 +487,7 @@ export default function AskPulsePage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(2, 1fr)",
+                gridTemplateColumns: "repeat(3, 1fr)",
                 gap: 12,
                 width: "100%",
                 maxWidth: 700,
