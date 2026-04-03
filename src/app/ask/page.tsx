@@ -966,7 +966,8 @@ function CategoryCard({
               e.currentTarget.style.color = "#5A7A8A";
             }}
           >
-            {q}
+            {/* Truncate long init1... addresses for display only */}
+            {q.replace(/(init1[a-z0-9]{6})[a-z0-9]{20,}/g, "$1...")}
           </button>
         ))}
       </div>
