@@ -76,35 +76,17 @@ const CATEGORIES = [
     label: "Staking",
     questions: [
       "Best validators to stake with for a balanced portfolio?",
+      "Stake 1 INIT on Chorus One",
       "Which validators have the lowest commission?",
-      "Should I stake or provide LP right now?",
     ],
   },
   {
     icon: ArrowLeftRight,
-    label: "Bridge",
+    label: "Bridge & Send",
     questions: [
       "How do I bridge INIT to the Pulse rollup?",
-      "What's the fastest bridge path between minitias?",
       "Show me active bridge channels and their status",
-    ],
-  },
-  {
-    icon: Shield,
-    label: "Security",
-    questions: [
-      "Which minitias have oracle-enabled bridges?",
-      "What's the finalization period for OPinit bridges?",
-      "Any validator centralization concerns?",
-    ],
-  },
-  {
-    icon: Zap,
-    label: "Deploy",
-    questions: [
-      "Where should I deploy a DeFi app on Initia?",
-      "Compare minitia block times and throughput",
-      "Which rollups support Celestia DA?",
+      "What's the fastest bridge path between minitias?",
     ],
   },
   {
@@ -112,8 +94,8 @@ const CATEGORIES = [
     label: "Data",
     questions: [
       "Total transactions across all minitias",
-      "IBC channel activity summary",
       "How many validators are active on L1?",
+      "IBC channel activity summary",
     ],
   },
 ];
@@ -487,7 +469,7 @@ export default function AskPulsePage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
+                gridTemplateColumns: "repeat(2, 1fr)",
                 gap: 12,
                 width: "100%",
                 maxWidth: 700,
