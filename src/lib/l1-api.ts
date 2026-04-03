@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchSafe, L1_REST, L1_INDEX, getL1Urls, type NetworkMode } from "./initia-client";
+import { apiFetch, apiFetchSafe, apiFetchNoCache, L1_REST, L1_INDEX, getL1Urls, type NetworkMode } from "./initia-client";
 import { L1Block, L1Validator, OpinitBridge, Proposal, ProposalTally, ValidatorVote } from "./types";
 
 // ─── Blocks (indexer, with REST fallback) ─────────────────────────────────────
@@ -108,11 +108,14 @@ export async function fetchUserBalance(
   network?: NetworkMode,
 ): Promise<{ denom: string; amount: string }[]> {
   const { rest } = getL1Urls(network);
-  const data = await apiFetchSafe<{ balances: { denom: string; amount: string }[] }>(
-    `${rest}/cosmos/bank/v1beta1/balances/${address}`,
-    { balances: [] },
-  );
-  return data.balances || [];
+  try {
+    const data = await apiFetchNoCache<{ balances: { denom: string; amount: string }[] }>(
+      `${rest}/cosmos/bank/v1beta1/balances/${address}`,
+    );
+    return data.balances || [];
+  } catch {
+    return [];
+  }
 }
 
 // ─── User delegations (mstaking) ─────────────────────────────────────────────
@@ -129,10 +132,14 @@ export async function fetchUserDelegations(
   network?: NetworkMode,
 ): Promise<UserDelegation[]> {
   const { rest } = getL1Urls(network);
-  const data = await apiFetchSafe<{ delegation_responses: unknown[] }>(
-    `${rest}/initia/mstaking/v1/delegations/${address}`,
-    { delegation_responses: [] },
-  );
+  let data: { delegation_responses: unknown[] };
+  try {
+    data = await apiFetchNoCache<{ delegation_responses: unknown[] }>(
+      `${rest}/initia/mstaking/v1/delegations/${address}`,
+    );
+  } catch {
+    data = { delegation_responses: [] };
+  }
   const monikerMap = new Map(validators.map((v) => [v.operator_address, v.moniker]));
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data.delegation_responses || []).flatMap((d: any) => {

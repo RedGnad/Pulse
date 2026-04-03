@@ -1,11 +1,11 @@
 // Low-level fetch with timeout — used by all API modules
-export async function apiFetch<T>(url: string, timeoutMs = 5000): Promise<T> {
+export async function apiFetch<T>(url: string, timeoutMs = 5000, noCache = false): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      next: { revalidate: 30 },
+      ...(noCache ? { cache: "no-store" as const } : { next: { revalidate: 30 } }),
       headers: { Accept: "application/json" },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
@@ -13,6 +13,11 @@ export async function apiFetch<T>(url: string, timeoutMs = 5000): Promise<T> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Fetch without Next.js cache — for user-specific data (balances, delegations) */
+export async function apiFetchNoCache<T>(url: string, timeoutMs = 5000): Promise<T> {
+  return apiFetch<T>(url, timeoutMs, true);
 }
 
 export async function apiFetchSafe<T>(url: string, fallback: T, timeoutMs = 5000): Promise<T> {
