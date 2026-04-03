@@ -95,7 +95,7 @@ const CATEGORIES = [
     questions: [
       "Which minitias have oracle-enabled bridges?",
       "What's the finalization period for OPinit bridges?",
-      "Any validator centralization concerns?",
+      "How decentralized is the validator set?",
     ],
   },
   {
