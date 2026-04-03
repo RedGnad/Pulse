@@ -787,6 +787,45 @@ export default function AskPulsePage() {
             />
           </button>
         </form>
+        {/* Auto-sign toggle — only visible when connected on testnet */}
+        {isConnected && network === "testnet" && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            marginTop: 8,
+          }}>
+            <button
+              onClick={async () => {
+                if (!autoSign) return;
+                const chainId = "initiation-2";
+                if (autoSign.isEnabledByChain?.[chainId]) {
+                  try { await autoSign.disable(chainId); } catch { await autoSign.enable(chainId); }
+                } else {
+                  await autoSign.enable(chainId);
+                }
+              }}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                borderRadius: 6,
+                border: `1px solid ${autoSign?.isEnabledByChain?.["initiation-2"] ? "rgba(0,255,136,0.3)" : "rgba(255,255,255,0.08)"}`,
+                background: autoSign?.isEnabledByChain?.["initiation-2"] ? "rgba(0,255,136,0.08)" : "rgba(255,255,255,0.03)",
+                cursor: "pointer",
+                fontFamily: "var(--font-jetbrains), monospace",
+                fontSize: 11,
+                color: autoSign?.isEnabledByChain?.["initiation-2"] ? "#00FF88" : "#3A5A6A",
+                transition: "all 0.15s",
+              }}
+            >
+              <Zap style={{ width: 11, height: 11 }} />
+              Auto-sign {autoSign?.isEnabledByChain?.["initiation-2"] ? "ON" : "OFF"}
+            </button>
+          </div>
+        )}
         <p
           style={{
             textAlign: "center",
