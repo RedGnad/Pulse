@@ -1,9 +1,9 @@
 /**
- * Action intent parser for Ask Pulse — detects send/stake/bridge intents
+ * Action intent parser for Ask Pulse — detects send/stake/unstake/bridge intents
  * from natural language and returns structured action data.
  */
 
-export type ActionType = "send" | "stake" | "bridge";
+export type ActionType = "send" | "stake" | "unstake" | "bridge";
 
 export interface ActionIntent {
   type: ActionType;
@@ -13,6 +13,7 @@ export interface ActionIntent {
   params: {
     amount?: string;
     recipient?: string;
+    recipientUsername?: string;
     validator?: string;
     validatorName?: string;
   };
@@ -33,20 +34,80 @@ export function parseActionIntent(
 ): ActionIntent | null {
   const msg = message.trim();
 
-  // Send: "send 10 INIT to init1abc..." — only match valid bech32
+  // Send: "send 10 INIT to init1abc..." or "send 10 INIT to @alice" / "send 10 INIT to alice.init"
   const sendMatch = msg.match(
-    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|a|vers|→)\s*(init1[a-z0-9]+)/i
+    /(?:send|transfer|envoie|envoyer)\s+([\d.]+)\s*(?:init)?\s*(?:to|à|a|vers|→)\s*(.+)/i
   );
   if (sendMatch) {
-    const [, amount, recipient] = sendMatch;
-    if (!VALID_INITIA_ADDR.test(recipient)) return null; // invalid address → no action card
-    return {
-      type: "send",
-      chainId: "initiation-2",
-      label: `Send ${amount} INIT`,
-      description: `Transfer ${amount} INIT to ${recipient.slice(0, 12)}...${recipient.slice(-4)}`,
-      params: { amount, recipient },
-    };
+    const [, amount, rawTarget] = sendMatch;
+    const target = rawTarget.trim().replace(/[.!?]+$/, "");
+
+    // Direct address
+    if (target.startsWith("init1")) {
+      if (!VALID_INITIA_ADDR.test(target)) return null;
+      return {
+        type: "send",
+        chainId: "initiation-2",
+        label: `Send ${amount} INIT`,
+        description: `Transfer ${amount} INIT to ${target.slice(0, 12)}...${target.slice(-4)}`,
+        params: { amount, recipient: target },
+      };
+    }
+
+    // Username: @alice or alice.init
+    const usernameMatch = target.match(/^@?([a-z0-9_-]+)(?:\.init)?$/i);
+    if (usernameMatch) {
+      const name = usernameMatch[1].toLowerCase();
+      return {
+        type: "send",
+        chainId: "initiation-2",
+        label: `Send ${amount} INIT`,
+        description: `Transfer ${amount} INIT to @${name}.init`,
+        params: { amount, recipientUsername: name },
+      };
+    }
+
+    return null;
+  }
+
+  // Unstake: "unstake 10 INIT from Chorus One" or "undelegate 10 INIT from initvaloper1..."
+  const unstakeMatch = msg.match(
+    /(?:unstake|undelegate|undéléguer|retirer)\s+([\d.]+)\s*(?:init)?\s*(?:from|de|depuis)\s+(.+)/i
+  );
+  if (unstakeMatch) {
+    const [, amount, target] = unstakeMatch;
+    const trimmed = target.trim().replace(/[.!?]+$/, "");
+
+    if (trimmed.startsWith("initvaloper")) {
+      if (!VALID_VALOPER_ADDR.test(trimmed)) return null;
+      return {
+        type: "unstake",
+        chainId: "initiation-2",
+        label: `Unstake ${amount} INIT`,
+        description: `Undelegate ${amount} INIT from ${trimmed.slice(0, 20)}...`,
+        params: { amount, validator: trimmed },
+      };
+    }
+
+    if (validators?.length) {
+      const lower = trimmed.toLowerCase();
+      const val = validators.find(
+        (v) => v.moniker.toLowerCase() === lower
+      ) ?? validators.find(
+        (v) => v.moniker.toLowerCase().includes(lower) || lower.includes(v.moniker.toLowerCase())
+      );
+      if (val) {
+        return {
+          type: "unstake",
+          chainId: "initiation-2",
+          label: `Unstake ${amount} INIT`,
+          description: `Undelegate ${amount} INIT from ${val.moniker}`,
+          params: { amount, validator: val.operator_address, validatorName: val.moniker },
+        };
+      }
+    }
+
+    return null;
   }
 
   // Stake: "stake 10 INIT on/with Maestro" or "delegate 10 INIT to initvaloper1..."
@@ -58,7 +119,7 @@ export function parseActionIntent(
     const trimmed = target.trim().replace(/[.!?]+$/, "");
 
     if (trimmed.startsWith("initvaloper")) {
-      if (!VALID_VALOPER_ADDR.test(trimmed)) return null; // invalid validator address
+      if (!VALID_VALOPER_ADDR.test(trimmed)) return null;
       return {
         type: "stake",
         chainId: "initiation-2",
@@ -68,7 +129,6 @@ export function parseActionIntent(
       };
     }
 
-    // Resolve validator by name — only exact or strong match
     if (validators?.length) {
       const lower = trimmed.toLowerCase();
       const val = validators.find(
@@ -87,7 +147,6 @@ export function parseActionIntent(
       }
     }
 
-    // Validator not found — no action card (AI response will guide the user)
     return null;
   }
 

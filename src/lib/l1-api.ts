@@ -290,6 +290,51 @@ export async function fetchLatestBlockTxCount(network?: NetworkMode): Promise<nu
   return data.block?.data?.txs?.length ?? 0;
 }
 
+// ─── Initia Username resolution (.init) ──────────────────────────────────────
+const USERNAMES_MODULE: Record<string, string> = {
+  testnet: "0x42cd8467b1c86e59bf319e5664a09b6b5840bb3fac64f5ce690b5041c530565a",
+  mainnet: "0x72ed9b26ecdcd6a21d304df50f19abfdbe31d2c02f60c84627844620a45940ef",
+};
+
+/** Resolve a .init username to a bech32 address via Move view function */
+export async function resolveInitUsername(
+  name: string,
+  network: NetworkMode = "testnet",
+): Promise<string | null> {
+  const { rest } = getL1Urls(network);
+  const moduleAddr = USERNAMES_MODULE[network];
+  // BCS encode string: ULEB128 length prefix + UTF-8 bytes, then base64
+  const encoder = new TextEncoder();
+  const nameBytes = encoder.encode(name);
+  const bcsBytes = new Uint8Array([nameBytes.length, ...nameBytes]);
+  const base64Arg = Buffer.from(bcsBytes).toString("base64");
+
+  try {
+    const res = await fetch(`${rest}/initia/move/v1/view`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        address: moduleAddr,
+        module_name: "usernames",
+        function_name: "get_address_from_name",
+        type_args: [],
+        args: [base64Arg],
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // Response is like { data: "\"init1abc...\"" } or { data: "null" }
+    const raw = data?.data;
+    if (!raw || raw === "null") return null;
+    const addr = raw.replace(/"/g, "");
+    if (addr.startsWith("init1") && addr.length === 43) return addr;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Aggregate L1 data ────────────────────────────────────────────────────────
 export async function fetchL1Data(network?: NetworkMode) {
   const [recentBlocks, txCount, blockHeight, validatorData, bridges, latestBlockTx] = await Promise.allSettled([

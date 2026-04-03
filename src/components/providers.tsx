@@ -66,6 +66,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             "initiation-2": [
               "/cosmos.bank.v1beta1.MsgSend",
               "/initia.mstaking.v1.MsgDelegate",
+              "/initia.mstaking.v1.MsgUndelegate",
             ],
             [PULSE_CHAIN_ID]: [
               "/minievm.evm.v1.MsgCall",

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchEcosystemData } from "@/lib/initia-registry";
 import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
-import { fetchL1Data, fetchUserBalance, fetchUserDelegations } from "@/lib/l1-api";
+import { fetchL1Data, fetchUserBalance, fetchUserDelegations, resolveInitUsername } from "@/lib/l1-api";
 import { chatWithEcosystem } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
@@ -92,7 +92,18 @@ export async function POST(req: NextRequest) {
         : message;
     const response = await chatWithEcosystem(augmentedMessage, history, ecosystemData, mode === "full");
     // Only return executable actions on testnet
-    const action = isMainnet ? null : parseActionIntent(message, ecosystemData.l1.validators);
+    let action = isMainnet ? null : parseActionIntent(message, ecosystemData.l1.validators);
+    // Resolve .init username → address for send actions
+    if (action?.params.recipientUsername) {
+      const resolved = await resolveInitUsername(action.params.recipientUsername, network);
+      if (resolved) {
+        action.params.recipient = resolved;
+        action.description = `Transfer ${action.params.amount} INIT to @${action.params.recipientUsername}.init (${resolved.slice(0, 12)}...)`;
+      } else {
+        // Username not found — drop the action, AI response will explain
+        action = null;
+      }
+    }
     return NextResponse.json({ response, action });
   } catch (error) {
     console.error("Chat error:", error);

@@ -237,14 +237,17 @@ export default function AskPulsePage() {
             amount: [{ denom: "uinit", amount: amountMicro }],
           },
         }];
-      } else if (action.type === "stake") {
+      } else if (action.type === "stake" || action.type === "unstake") {
         if (!action.params.validator) {
           setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
           setTxError(prev => ({ ...prev, [msgIndex]: "Validator address not resolved. Use a full initvaloper address." }));
           return;
         }
+        const typeUrl = action.type === "stake"
+          ? "/initia.mstaking.v1.MsgDelegate"
+          : "/initia.mstaking.v1.MsgUndelegate";
         messages = [{
-          typeUrl: "/initia.mstaking.v1.MsgDelegate",
+          typeUrl,
           value: {
             delegatorAddress: initiaAddress,
             validatorAddress: action.params.validator,
@@ -1119,6 +1122,7 @@ function MessageBubble({ msg }: { msg: ChatMsg }) {
 const ACTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement> & { style?: React.CSSProperties }>> = {
   send: Coins,
   stake: Lock,
+  unstake: Lock,
   bridge: ArrowLeftRight,
 };
 
