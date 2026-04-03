@@ -84,7 +84,7 @@ const CATEGORIES = [
     icon: ArrowLeftRight,
     label: "Bridge",
     questions: [
-      "How do I bridge INIT to the Pulse rollup?",
+      "Bridge 5 INIT to a rollup",
       "What's the fastest bridge path between minitias?",
       "Show me active bridge channels and their status",
     ],
@@ -111,8 +111,8 @@ const CATEGORIES = [
     icon: BarChart3,
     label: "Data",
     questions: [
-      "Total transactions across all minitias",
       "Send 0.1 INIT to init18wahzdxxcaz36d53060alequs747ydfrej6mdm",
+      "Where are my staked funds?",
       "How many validators are active on L1?",
     ],
   },
@@ -283,7 +283,14 @@ export default function AskPulsePage() {
     } catch (err) {
       setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
       const raw = err instanceof Error ? err.message : "Transaction failed";
-      setTxError(prev => ({ ...prev, [msgIndex]: friendlyTxError(raw) }));
+      const friendly = friendlyTxError(raw);
+      setTxError(prev => ({ ...prev, [msgIndex]: friendly }));
+      // Add an AI message explaining the failure
+      setChat(prev => [...prev, {
+        role: "assistant" as const,
+        content: `**Transaction failed:** ${friendly}\n\nThis can happen if you don't have enough INIT to cover the amount + gas fees, if auto-sign session expired, or if the network is congested. You can try again — if the issue persists, try disconnecting and reconnecting your wallet to reset the session.`,
+        timestamp: Date.now(),
+      }]);
     }
   }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxSync, submitTxBlock, estimateGas]);
 
