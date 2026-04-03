@@ -17,6 +17,7 @@ import {
   Lock,
 } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
+import { calculateFee, GasPrice } from "@cosmjs/stargate";
 import { useEcosystem } from "@/hooks/use-ecosystem";
 import { useNetwork } from "@/contexts/network-context";
 import { scoreColor } from "@/lib/pulse-score";
@@ -142,7 +143,7 @@ export default function AskPulsePage() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { openBridge, requestTxSync, autoSign, initiaAddress, isConnected, openConnect } = useInterwovenKit();
+  const { openBridge, requestTxSync, submitTxBlock, estimateGas, autoSign, initiaAddress, isConnected, openConnect } = useInterwovenKit();
   const { data: ecosystem } = useEcosystem();
   const { network } = useNetwork();
   const [txStatus, setTxStatus] = useState<Record<number, "idle" | "signing" | "pending" | "success" | "error">>({});
@@ -259,23 +260,32 @@ export default function AskPulsePage() {
       const isAutoSignActive = !!autoSign?.isEnabledByChain?.[chainId];
 
       setTxStatus(prev => ({ ...prev, [msgIndex]: "pending" }));
-      // requestTxSync with autoSign flag — SDK handles gas estimation,
-      // skips modal when autoSign is true (official BlockForge pattern)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const txHash = await (requestTxSync as any)({
-        messages,
-        chainId,
-        autoSign: isAutoSignActive,
-        feeDenom: isAutoSignActive ? "uinit" : undefined,
-      });
-      setTxHash(prev => ({ ...prev, [msgIndex]: txHash }));
+
+      let hash: string;
+      if (isAutoSignActive) {
+        // Auto-sign active → submitTxBlock (never shows popup)
+        // Manual gas estimation required (official pattern from docs + Hunch)
+        const gasEstimate = await estimateGas({ messages, chainId });
+        const fee = calculateFee(
+          Math.ceil(gasEstimate * 1.4),
+          GasPrice.fromString("0.015uinit"),
+        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const result: any = await submitTxBlock({ messages, fee, chainId });
+        hash = result?.transactionHash ?? result?.txhash ?? "";
+      } else {
+        // No auto-sign → requestTxSync (shows wallet popup)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        hash = await (requestTxSync as any)({ messages, chainId });
+      }
+      setTxHash(prev => ({ ...prev, [msgIndex]: hash }));
       setTxStatus(prev => ({ ...prev, [msgIndex]: "success" }));
     } catch (err) {
       setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
       const raw = err instanceof Error ? err.message : "Transaction failed";
       setTxError(prev => ({ ...prev, [msgIndex]: friendlyTxError(raw) }));
     }
-  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxSync]);
+  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxSync, submitTxBlock, estimateGas]);
 
   const lastMsg = chat.length > 0 ? chat[chat.length - 1] : null;
   const showBridgeAction =
