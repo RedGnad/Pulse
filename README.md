@@ -14,7 +14,7 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 
 - **Native Features** (2):
   - **Interwoven Bridge**: Integrated via InterwovenKit's `openBridge` hook, enabling cross-rollup asset movement across the Interwoven Network. Users can bridge INIT between L1 and any minitia from 5 entry points: bridge widget, Ask Pulse chat, floating chat, wallet portfolio, and chain detail panel (which targets the selected minitia).
-  - **Auto-Signing Actions**: Ask Pulse supports natural language transaction execution. Users can type "send 10 INIT to init1...", "stake 50 INIT on [validator]", or "bridge 5 INIT" — the AI parses the intent, shows a confirmation card, and executes via InterwovenKit's `requestTxBlock` with auto-signing enabled. No wallet popups after initial session approval.
+  - **Auto-Signing Actions**: Ask Pulse supports natural language transaction execution. Users can type "send 10 INIT to init1...", "stake 50 INIT on [validator]", or "bridge 5 INIT" — the AI parses the intent, shows a confirmation card, and executes via InterwovenKit's `submitTxBlock` with auto-signing enabled (gas estimated via `estimateGas` + `calculateFee`). No wallet popups after initial session approval.
 
 ### How to Run Locally
 
@@ -111,4 +111,4 @@ AI_API_KEY=lm-studio
 - **Contract**: Solidity ^0.8.24, deployed with Foundry
 - **Frontend**: Next.js 16, TypeScript, InterwovenKit v2, wagmi, TanStack Query
 - **AI**: Multi-provider (Anthropic, OpenAI, Ollama, LM Studio, Groq, or any OpenAI-compatible API), built for multi-agentic analysis
-- **Native Features**: Interwoven Bridge via `openBridge()` + Auto-Signing via `requestTxBlock` with natural language intent parsing
+- **Native Features**: Interwoven Bridge via `openBridge()` + Auto-Signing via `submitTxBlock` with natural language intent parsing
