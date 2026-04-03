@@ -19,6 +19,7 @@ import {
 import { useInterwovenKit } from "@initia/interwovenkit-react";
 import { calculateFee, GasPrice } from "@cosmjs/stargate";
 import { useEcosystem } from "@/hooks/use-ecosystem";
+import { useUsername } from "@/hooks/use-username";
 import { useNetwork } from "@/contexts/network-context";
 import { scoreColor } from "@/lib/pulse-score";
 import type { ActionIntent } from "@/lib/action-parser";
@@ -145,6 +146,7 @@ export default function AskPulsePage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { openBridge, requestTxSync, submitTxBlock, estimateGas, autoSign, initiaAddress, isConnected, openConnect } = useInterwovenKit();
   const { data: ecosystem } = useEcosystem();
+  const { username } = useUsername(initiaAddress);
   const { network } = useNetwork();
   const [txStatus, setTxStatus] = useState<Record<number, "idle" | "signing" | "pending" | "success" | "error">>({});
   const [txHash, setTxHash] = useState<Record<number, string>>({});
@@ -181,6 +183,7 @@ export default function AskPulsePage() {
             mode: "full",
             network,
             userAddress: initiaAddress || undefined,
+            username: username || undefined,
           }),
         });
         const json = await res.json();
@@ -407,6 +410,20 @@ export default function AskPulsePage() {
                 <br />
                 Ask anything about Initia — staking, bridging, deploying, or monitoring.
               </p>
+
+              {/* Connected user identity */}
+              {isConnected && initiaAddress && (
+                <p style={{
+                  fontFamily: "var(--font-jetbrains), monospace",
+                  fontSize: 12,
+                  color: username ? "#00FF88" : "#5A7A8A",
+                  margin: 0,
+                }}>
+                  {username
+                    ? `Connected as @${username}`
+                    : `${initiaAddress.slice(0, 12)}...${initiaAddress.slice(-4)}`}
+                </p>
+              )}
 
               {/* Live data indicator */}
               <div

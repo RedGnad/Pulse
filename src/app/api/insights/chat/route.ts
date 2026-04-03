@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { message, history = [], mode = "widget", network: networkParam, userAddress } = await req.json();
+    const { message, history = [], mode = "widget", network: networkParam, userAddress, username } = await req.json();
     if (!message?.trim()) return NextResponse.json({ error: "Empty message" }, { status: 400 });
 
     const network = (networkParam ?? "testnet") as NetworkMode;
@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
         return `- ${amt} ${d.denom === "uinit" ? "INIT" : d.denom} staked on **${d.validatorMoniker}**`;
       });
 
-      walletContext = `\n\n[USER WALLET DATA — address: ${userAddress}]`
+      const identity = username ? `@${username} (${userAddress})` : userAddress;
+      walletContext = `\n\n[USER WALLET DATA — ${identity}]`
         + `\nAvailable balance:\n${balanceLines.length > 0 ? balanceLines.join("\n") : "- No tokens found"}`
         + `\nStaking positions:\n${delegationLines.length > 0 ? delegationLines.join("\n") : "- No active staking positions"}\n`;
     }
