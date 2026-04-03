@@ -787,43 +787,64 @@ export default function AskPulsePage() {
             />
           </button>
         </form>
-        {/* Auto-sign toggle — only visible when connected on testnet */}
-        {isConnected && network === "testnet" && (
+        {/* Auto-sign toggle — testnet only */}
+        {network === "testnet" && (
           <div style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             gap: 8,
-            marginTop: 8,
+            marginTop: 10,
           }}>
-            <button
-              onClick={async () => {
-                if (!autoSign) return;
-                const chainId = "initiation-2";
-                if (autoSign.isEnabledByChain?.[chainId]) {
-                  try { await autoSign.disable(chainId); } catch { await autoSign.enable(chainId); }
-                } else {
-                  await autoSign.enable(chainId);
-                }
-              }}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
-                borderRadius: 6,
-                border: `1px solid ${autoSign?.isEnabledByChain?.["initiation-2"] ? "rgba(0,255,136,0.3)" : "rgba(255,255,255,0.08)"}`,
-                background: autoSign?.isEnabledByChain?.["initiation-2"] ? "rgba(0,255,136,0.08)" : "rgba(255,255,255,0.03)",
-                cursor: "pointer",
-                fontFamily: "var(--font-jetbrains), monospace",
-                fontSize: 11,
-                color: autoSign?.isEnabledByChain?.["initiation-2"] ? "#00FF88" : "#3A5A6A",
-                transition: "all 0.15s",
-              }}
-            >
-              <Zap style={{ width: 11, height: 11 }} />
-              Auto-sign {autoSign?.isEnabledByChain?.["initiation-2"] ? "ON" : "OFF"}
-            </button>
+            {(() => {
+              const enabled = !!autoSign?.isEnabledByChain?.["initiation-2"];
+              return (
+                <button
+                  onClick={async () => {
+                    if (!isConnected) { openConnect(); return; }
+                    if (!autoSign) return;
+                    const chainId = "initiation-2";
+                    if (enabled) {
+                      try { await autoSign.disable(chainId); } catch { await autoSign.enable(chainId); }
+                    } else {
+                      await autoSign.enable(chainId);
+                    }
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 7,
+                    padding: "6px 14px",
+                    borderRadius: 8,
+                    border: `1px solid ${enabled ? "rgba(0,255,136,0.35)" : "rgba(138,180,200,0.2)"}`,
+                    background: enabled ? "rgba(0,255,136,0.1)" : "rgba(138,180,200,0.06)",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-jetbrains), monospace",
+                    fontSize: 12,
+                    color: enabled ? "#00FF88" : "#8AB4C8",
+                    transition: "all 0.2s",
+                    letterSpacing: 0.3,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = enabled ? "rgba(0,255,136,0.18)" : "rgba(138,180,200,0.12)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = enabled ? "rgba(0,255,136,0.1)" : "rgba(138,180,200,0.06)";
+                  }}
+                >
+                  <Zap style={{ width: 12, height: 12 }} />
+                  Auto-sign {enabled ? "ON" : "OFF"}
+                  <span style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    background: enabled ? "#00FF88" : "#3A5A6A",
+                    boxShadow: enabled ? "0 0 6px rgba(0,255,136,0.5)" : "none",
+                    transition: "all 0.2s",
+                  }} />
+                </button>
+              );
+            })()}
           </div>
         )}
         <p
