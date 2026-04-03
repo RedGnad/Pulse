@@ -84,7 +84,7 @@ const CATEGORIES = [
     icon: ArrowLeftRight,
     label: "Bridge",
     questions: [
-      "Bridge 5 INIT to Pulse rollup",
+      "How do I bridge INIT to the Pulse rollup?",
       "What's the fastest bridge path between minitias?",
       "Show me active bridge channels and their status",
     ],
