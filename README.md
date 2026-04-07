@@ -160,6 +160,6 @@ The oracle is designed to write snapshots every 5 minutes. For production 5-min 
 
 - **Option A**: Upgrade your hosting infra
 - **Option B**: Use an external cron service
-- **Local dev**: Use `scripts/oracle-cron.ts` for true 5-min scheduling
+- **Local dev**: Use `scripts/oracle-cron.ts` 
 
 
