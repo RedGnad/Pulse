@@ -65,7 +65,7 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 - Deterministic scoring: `ecosystemHealth` is derived from the Pulse Score formula (see `pulse-score.ts`), not an AI opinion
 
 ### What Pulse does not prove
-- Data authenticity: the hash proves integrity, not that the source data is correct
+- Data authenticity: the hash proves integrity, not that the source data is correct, always manage your agent model choice.
 - AI reasoning correctness: the brief is AI-generated context, not a verified claim
 
 ### Current trust assumptions
@@ -157,12 +157,10 @@ The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not regist
 
 ### Oracle Cron Schedule
 
-The oracle is designed to write snapshots every 5 minutes. However, **Vercel Hobby plan limits cron jobs to 1/day**. For production 5-min intervals:
+The oracle is designed to write snapshots every 5 minutes. For production 5-min intervals:
 
 - **Option A**: Upgrade your hosting infra
 - **Option B**: Use an external cron service
 - **Local dev**: Use `scripts/oracle-cron.ts` for true 5-min scheduling
-
-The oracle code is fully 5-min ready — only the hosting plan limits frequency.
 
 
