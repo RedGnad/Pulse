@@ -70,7 +70,7 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 ### Current trust assumptions
 - Single backend signer writes snapshots (writer key)
 - Data sources: Initia registry, L1 RPC, minitia RPCs (all public endpoints)
-- Multi-writer architecture is implemented in the contract (`setWriter`) for future multi-oracle scenarios
+- Multi-writer architecture is implemented in the contract (`setWriter`) for multi-oracle scenarios
 
 ### Decentralization path
 - v2: Multiple independent writers with quorum (2-of-3 agreement required)
