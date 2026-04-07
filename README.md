@@ -148,7 +148,7 @@ The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not regist
 **What this means in practice:**
 
 - The **Interwoven Bridge** is fully implemented in code via InterwovenKit's `openBridge()` hook (5 integration points across the app), but the bridge modal won't list `initia-pulse-1` as a destination on the public bridge UI.
-- **This does not affect core functionality.** Pulse's value is read-only intelligence: the AI agent writes oracle snapshots using a backend signer key, and all dashboards, AI advisor, and chat features work independently of user-bridged assets. No user needs to bridge tokens to use Pulse.
+- **This does not affect core functionality.** Pulse's value is read-only intelligence: the AI agent writes oracle snapshots using a backend signer key, and all dashboards, AI advisor, and chat features work independently of user-bridged assets. No user needs to bridge tokens to use Pulse for now.
 - **Auto-sign actions (send, stake) execute on L1 testnet** (initiation-2) and work on the live site regardless of the local rollup limitation.
 - **Intended production flow:** In a registered rollup scenario, the bridge allows users to move INIT between L1 and any rollup. The PulseOracle data remains freely readable by any contract or frontend without bridging — the bridge enables asset movement across the Interwoven Network, not oracle access.
 
