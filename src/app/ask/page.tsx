@@ -112,12 +112,12 @@ const CATEGORIES = [
     ],
   },
   {
-    icon: Vote,
-    label: "Governance",
+    icon: BarChart3,
+    label: "Data",
     questions: [
+      "Send 0.1 INIT to init18wahzdxxcaz36d53060alequs747ydfrej6mdm",
       "What proposals are open — can I vote from here?",
-      "Are there any proposals I should know about?",
-      "How does L1 governance work on Initia?",
+      "Where are my staked funds?",
     ],
   },
 ];
