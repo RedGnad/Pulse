@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchEcosystemData } from "@/lib/initia-registry";
 import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
-import { fetchL1Data, fetchUserBalance, fetchUserDelegations, resolveInitUsername } from "@/lib/l1-api";
+import { fetchL1Data, fetchUserBalance, fetchUserDelegations, resolveInitUsername, fetchProposals } from "@/lib/l1-api";
 import { chatWithEcosystem } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
@@ -84,12 +84,31 @@ export async function POST(req: NextRequest) {
       lastUpdated: new Date().toISOString(),
     };
 
+    // Fetch governance proposals if user asks about governance/voting
+    const isGovQuery = /\b(governance|proposal|vote|voting|gouvernance|proposition|voter)\b/i.test(message);
+    let govContext = "";
+    if (isGovQuery) {
+      try {
+        const { proposals } = await fetchProposals(20, network);
+        const active = proposals.filter(p => p.status === "PROPOSAL_STATUS_VOTING_PERIOD");
+        if (active.length > 0) {
+          govContext = `\n\n[ACTIVE GOVERNANCE PROPOSALS]\n` +
+            active.map(p => `- Proposal #${p.id}: "${p.title}" — voting ends ${p.voting_end_time}`).join("\n") +
+            `\n\nUsers can vote from Ask Pulse by saying "vote yes on proposal #ID". Votes are executed via PulseGov.sol on the Pulse EVM rollup, which uses the ICosmos precompile to relay the vote to Initia L1 governance.\n`;
+        } else {
+          govContext = `\n\n[GOVERNANCE] No proposals currently in voting period on ${network === "mainnet" ? "mainnet" : "testnet"}.\n`;
+        }
+      } catch { /* non-critical */ }
+    }
+
     const isMainnet = network === "mainnet";
     const augmentedMessage = walletContext
-      ? message + walletContext
-      : isMainnet && /\b(send|stake|bridge|envoie|delegate|staker)\b/i.test(message)
-        ? message + "\n\n[SYSTEM NOTE: User is in MAINNET mode. On-chain actions (send, stake, bridge) are only available on testnet. Inform the user they need to switch to testnet mode to execute transactions.]"
-        : message;
+      ? message + walletContext + govContext
+      : govContext
+        ? message + govContext
+        : isMainnet && /\b(send|stake|bridge|envoie|delegate|staker)\b/i.test(message)
+          ? message + "\n\n[SYSTEM NOTE: User is in MAINNET mode. On-chain actions (send, stake, bridge) are only available on testnet. Inform the user they need to switch to testnet mode to execute transactions.]"
+          : message;
     const response = await chatWithEcosystem(augmentedMessage, history, ecosystemData, mode === "full");
     // Only return executable actions on testnet
     let action = isMainnet ? null : parseActionIntent(message, ecosystemData.l1.validators);

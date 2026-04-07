@@ -15,10 +15,13 @@ import {
   XCircle,
   Coins,
   Lock,
+  Vote,
 } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
+import { useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { calculateFee, GasPrice } from "@cosmjs/stargate";
 import { useEcosystem } from "@/hooks/use-ecosystem";
+import { initiaPulse } from "@/lib/wagmi-config";
 import { useUsername } from "@/hooks/use-username";
 import { useNetwork } from "@/contexts/network-context";
 import { scoreColor } from "@/lib/pulse-score";
@@ -109,11 +112,11 @@ const CATEGORIES = [
     ],
   },
   {
-    icon: BarChart3,
-    label: "Data",
+    icon: Vote,
+    label: "Governance",
     questions: [
-      "Send 0.1 INIT to init18wahzdxxcaz36d53060alequs747ydfrej6mdm",
-      "Where are my staked funds?",
+      "Are there any active governance proposals?",
+      "Vote yes on proposal 1",
       "How many validators are active on L1?",
     ],
   },
@@ -212,11 +215,34 @@ export default function AskPulsePage() {
     openBridge({ srcChainId: "initiation-2", srcDenom: "uinit" });
   }
 
+  const { writeContractAsync } = useWriteContract();
+
   const executeAction = useCallback(async (action: ActionIntent, msgIndex: number) => {
     if (!isConnected) { openConnect(); return; }
 
     if (action.type === "bridge") {
       openBridge({ srcChainId: "initiation-2", srcDenom: "uinit" });
+      return;
+    }
+
+    // Vote action — uses wagmi writeContract on PulseGov (EVM rollup)
+    if (action.type === "vote") {
+      setTxStatus(prev => ({ ...prev, [msgIndex]: "signing" }));
+      try {
+        const hash = await writeContractAsync({
+          address: PULSE_GOV_ADDRESS as `0x${string}`,
+          abi: PULSE_GOV_ABI,
+          functionName: "vote",
+          args: [BigInt(action.params.proposalId ?? "0"), action.params.voteOption ?? 1],
+          chainId: initiaPulse.id,
+        });
+        setTxHash(prev => ({ ...prev, [msgIndex]: hash }));
+        setTxStatus(prev => ({ ...prev, [msgIndex]: "success" }));
+      } catch (err) {
+        setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
+        const raw = err instanceof Error ? err.message : "Vote transaction failed";
+        setTxError(prev => ({ ...prev, [msgIndex]: friendlyTxError(raw) }));
+      }
       return;
     }
 
@@ -298,7 +324,7 @@ export default function AskPulsePage() {
         timestamp: Date.now(),
       }]);
     }
-  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxSync, submitTxBlock, estimateGas]);
+  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxSync, submitTxBlock, estimateGas, writeContractAsync]);
 
   const lastMsg = chat.length > 0 ? chat[chat.length - 1] : null;
   const showBridgeAction =
@@ -411,7 +437,7 @@ export default function AskPulsePage() {
               >
                 AI-powered intelligence with live ecosystem data.
                 <br />
-                Ask anything about Initia — staking, bridging, deploying, or monitoring.
+                Ask anything about Initia — staking, bridging, governance, or monitoring.
               </p>
 
               {/* Connected user identity */}
@@ -1119,11 +1145,26 @@ function MessageBubble({ msg }: { msg: ChatMsg }) {
 
 /* ─── Action Card ──────────────────────────────────────────────────────────── */
 
+const PULSE_GOV_ADDRESS = process.env.NEXT_PUBLIC_PULSE_GOV_ADDRESS ?? "0x0000000000000000000000000000000000000000";
+const PULSE_GOV_ABI = [
+  {
+    name: "vote",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "proposalId", type: "uint64" },
+      { name: "option", type: "uint8" },
+    ],
+    outputs: [],
+  },
+] as const;
+
 const ACTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement> & { style?: React.CSSProperties }>> = {
   send: Coins,
   stake: Lock,
   unstake: Lock,
   bridge: ArrowLeftRight,
+  vote: Vote,
 };
 
 function ActionCard({
@@ -1199,14 +1240,14 @@ function ActionCard({
               style={{
                 fontFamily: "var(--font-jetbrains), monospace",
                 fontSize: 10,
-                color: "#3A5A6A",
+                color: action.type === "vote" ? "#FFB800" : "#3A5A6A",
                 padding: "2px 6px",
                 borderRadius: 4,
-                background: "rgba(0,255,136,0.04)",
-                border: "1px solid rgba(0,255,136,0.08)",
+                background: action.type === "vote" ? "rgba(255,184,0,0.06)" : "rgba(0,255,136,0.04)",
+                border: `1px solid ${action.type === "vote" ? "rgba(255,184,0,0.15)" : "rgba(0,255,136,0.08)"}`,
               }}
             >
-              AUTO-SIGN
+              {action.type === "vote" ? "L1 GOV via ICosmos" : "AUTO-SIGN"}
             </span>
           )}
         </div>

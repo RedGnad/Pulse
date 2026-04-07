@@ -3,7 +3,7 @@
  * from natural language and returns structured action data.
  */
 
-export type ActionType = "send" | "stake" | "unstake" | "bridge";
+export type ActionType = "send" | "stake" | "unstake" | "bridge" | "vote";
 
 export interface ActionIntent {
   type: ActionType;
@@ -16,6 +16,8 @@ export interface ActionIntent {
     recipientUsername?: string;
     validator?: string;
     validatorName?: string;
+    proposalId?: string;
+    voteOption?: number; // 1=YES, 2=ABSTAIN, 3=NO, 4=VETO
   };
 }
 
@@ -148,6 +150,26 @@ export function parseActionIntent(
     }
 
     return null;
+  }
+
+  // Vote: "vote yes on proposal 42" / "vote no on 15" / "voter oui sur la proposition 42"
+  const voteMatch = msg.match(
+    /(?:vote|voter)\s+(yes|no|abstain|veto|oui|non)\s+(?:on|sur|for|pour)\s+(?:proposal\s*|proposition\s*|prop\s*|#)?(\d+)/i
+  );
+  if (voteMatch) {
+    const [, rawOption, proposalId] = voteMatch;
+    const optionMap: Record<string, number> = {
+      yes: 1, oui: 1, abstain: 2, no: 3, non: 3, veto: 4,
+    };
+    const voteOption = optionMap[rawOption.toLowerCase()] ?? 1;
+    const optionLabel = ["", "Yes", "Abstain", "No", "Veto"][voteOption];
+    return {
+      type: "vote",
+      chainId: "initia-pulse-1",
+      label: `Vote ${optionLabel} on Proposal #${proposalId}`,
+      description: `Vote ${optionLabel} on Initia L1 governance proposal #${proposalId} via PulseGov (ICosmos precompile)`,
+      params: { proposalId, voteOption },
+    };
   }
 
   // Bridge: "bridge 10 INIT to pulse" / "bridge 5 INIT"
