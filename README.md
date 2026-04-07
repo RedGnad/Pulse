@@ -144,8 +144,8 @@ AI_API_KEY=lm-studio
 
 The oracle is designed to write snapshots every 5 minutes. However, **Vercel Hobby plan limits cron jobs to 1/day**. For production 5-min intervals:
 
-- **Option A**: Upgrade to Vercel Pro (supports `*/5 * * * *` cron)
-- **Option B**: Use an external cron service (cron-job.org, UptimeRobot, etc.) hitting `POST /api/oracle/cron` with header `authorization: Bearer $CRON_SECRET`
+- **Option A**: Upgrade your hosting infra
+- **Option B**: Use an external cron service
 - **Local dev**: Use `scripts/oracle-cron.ts` for true 5-min scheduling
 
 The oracle code is fully 5-min ready — only the hosting plan limits frequency.
