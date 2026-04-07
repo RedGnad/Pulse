@@ -189,3 +189,30 @@ export function parseActionIntent(
 
   return null;
 }
+
+/**
+ * Parse a message for multiple sequential action intents.
+ * Splits on "then", "and then", "puis", "ensuite", "after that".
+ * Returns an array of valid actions (empty if none found).
+ */
+export function parseActionIntents(
+  message: string,
+  validators?: { moniker: string; operator_address: string }[]
+): ActionIntent[] {
+  const segments = message
+    .split(/\b(?:then|and then|after that|puis|ensuite|et ensuite|après)\b/i)
+    .map(s => s.trim())
+    .filter(Boolean);
+
+  if (segments.length <= 1) {
+    const single = parseActionIntent(message, validators);
+    return single ? [single] : [];
+  }
+
+  const actions: ActionIntent[] = [];
+  for (const segment of segments) {
+    const action = parseActionIntent(segment, validators);
+    if (action) actions.push(action);
+  }
+  return actions;
+}

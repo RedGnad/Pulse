@@ -5,7 +5,7 @@ import { fetchL1Data, fetchUserBalance, fetchUserDelegations, resolveInitUsernam
 import { chatWithEcosystem } from "@/lib/ai";
 import { EcosystemOverview } from "@/lib/types";
 import { computeAllPulseScores } from "@/lib/pulse-score";
-import { parseActionIntent } from "@/lib/action-parser";
+import { parseActionIntents } from "@/lib/action-parser";
 import type { NetworkMode } from "@/contexts/network-context";
 
 export async function POST(req: NextRequest) {
@@ -124,19 +124,21 @@ export async function POST(req: NextRequest) {
           : message;
     const response = await chatWithEcosystem(augmentedMessage, history, ecosystemData, mode === "full");
     // Only return executable actions on testnet
-    let action = isMainnet ? null : parseActionIntent(message, ecosystemData.l1.validators);
-    // Resolve .init username → address for send actions
-    if (action?.params.recipientUsername) {
-      const resolved = await resolveInitUsername(action.params.recipientUsername, network);
-      if (resolved) {
-        action.params.recipient = resolved;
-        action.description = `Transfer ${action.params.amount} INIT to @${action.params.recipientUsername}.init (${resolved.slice(0, 12)}...)`;
-      } else {
-        // Username not found — drop the action, AI response will explain
-        action = null;
+    let actions = isMainnet ? [] : parseActionIntents(message, ecosystemData.l1.validators);
+    // Resolve .init usernames → addresses for send actions
+    actions = await Promise.all(actions.map(async (action) => {
+      if (action.params.recipientUsername) {
+        const resolved = await resolveInitUsername(action.params.recipientUsername, network);
+        if (resolved) {
+          return { ...action, params: { ...action.params, recipient: resolved }, description: `Transfer ${action.params.amount} INIT to @${action.params.recipientUsername}.init (${resolved.slice(0, 12)}...)` };
+        }
+        return null; // username not found — drop this action
       }
-    }
-    return NextResponse.json({ response, action });
+      return action;
+    })).then(arr => arr.filter((a): a is NonNullable<typeof a> => a !== null));
+    // Backwards compat: action = first action or null
+    const action = actions.length > 0 ? actions[0] : null;
+    return NextResponse.json({ response, action, actions });
   } catch (error) {
     console.error("Chat error:", error);
     return NextResponse.json({ error: "Failed to process query" }, { status: 500 });

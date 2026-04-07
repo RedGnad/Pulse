@@ -32,6 +32,7 @@ interface ChatMsg {
   content: string;
   timestamp: number;
   action?: ActionIntent | null;
+  actions?: ActionIntent[];
 }
 
 /** Lightweight markdown renderer for AI responses — handles **bold**, line breaks */
@@ -151,9 +152,9 @@ export default function AskPulsePage() {
   const { data: ecosystem } = useEcosystem();
   const { username } = useUsername(initiaAddress);
   const { network } = useNetwork();
-  const [txStatus, setTxStatus] = useState<Record<number, "idle" | "signing" | "pending" | "success" | "error">>({});
-  const [txHash, setTxHash] = useState<Record<number, string>>({});
-  const [txError, setTxError] = useState<Record<number, string>>({});
+  const [txStatus, setTxStatus] = useState<Record<string, "idle" | "signing" | "pending" | "success" | "error">>({});
+  const [txHash, setTxHash] = useState<Record<string, string>>({});
+  const [txError, setTxError] = useState<Record<string, string>>({});
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -191,9 +192,10 @@ export default function AskPulsePage() {
         });
         const json = await res.json();
         const response = json.response || json.error;
+        const actions: ActionIntent[] = json.actions ?? (json.action ? [json.action] : []);
         setChat([
           ...newChat,
-          { role: "assistant", content: response, timestamp: Date.now(), action: json.action ?? null },
+          { role: "assistant", content: response, timestamp: Date.now(), action: actions[0] ?? null, actions },
         ]);
       } catch {
         setChat([
@@ -217,7 +219,7 @@ export default function AskPulsePage() {
 
   const { writeContractAsync } = useWriteContract();
 
-  const executeAction = useCallback(async (action: ActionIntent, msgIndex: number) => {
+  const executeAction = useCallback(async (action: ActionIntent, key: string) => {
     if (!isConnected) { openConnect(); return; }
 
     if (action.type === "bridge") {
@@ -227,7 +229,7 @@ export default function AskPulsePage() {
 
     // Vote action — uses wagmi writeContract on PulseGov (EVM rollup)
     if (action.type === "vote") {
-      setTxStatus(prev => ({ ...prev, [msgIndex]: "signing" }));
+      setTxStatus(prev => ({ ...prev, [key]: "signing" }));
       try {
         const hash = await writeContractAsync({
           address: PULSE_GOV_ADDRESS as `0x${string}`,
@@ -236,17 +238,17 @@ export default function AskPulsePage() {
           args: [BigInt(action.params.proposalId ?? "0"), action.params.voteOption ?? 1],
           chainId: initiaPulse.id,
         });
-        setTxHash(prev => ({ ...prev, [msgIndex]: hash }));
-        setTxStatus(prev => ({ ...prev, [msgIndex]: "success" }));
+        setTxHash(prev => ({ ...prev, [key]: hash }));
+        setTxStatus(prev => ({ ...prev, [key]: "success" }));
       } catch (err) {
-        setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
+        setTxStatus(prev => ({ ...prev, [key]: "error" }));
         const raw = err instanceof Error ? err.message : "Vote transaction failed";
-        setTxError(prev => ({ ...prev, [msgIndex]: friendlyTxError(raw) }));
+        setTxError(prev => ({ ...prev, [key]: friendlyTxError(raw) }));
       }
       return;
     }
 
-    setTxStatus(prev => ({ ...prev, [msgIndex]: "signing" }));
+    setTxStatus(prev => ({ ...prev, [key]: "signing" }));
 
     try {
       const chainId = action.chainId || "initiation-2";
@@ -265,8 +267,8 @@ export default function AskPulsePage() {
         }];
       } else if (action.type === "stake" || action.type === "unstake") {
         if (!action.params.validator) {
-          setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
-          setTxError(prev => ({ ...prev, [msgIndex]: "Validator address not resolved. Use a full initvaloper address." }));
+          setTxStatus(prev => ({ ...prev, [key]: "error" }));
+          setTxError(prev => ({ ...prev, [key]: "Validator address not resolved. Use a full initvaloper address." }));
           return;
         }
         const typeUrl = action.type === "stake"
@@ -291,7 +293,7 @@ export default function AskPulsePage() {
 
       const isAutoSignActive = !!autoSign?.isEnabledByChain?.[chainId];
 
-      setTxStatus(prev => ({ ...prev, [msgIndex]: "pending" }));
+      setTxStatus(prev => ({ ...prev, [key]: "pending" }));
 
       let hash: string;
       if (isAutoSignActive) {
@@ -310,13 +312,13 @@ export default function AskPulsePage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         hash = await (requestTxSync as any)({ messages, chainId });
       }
-      setTxHash(prev => ({ ...prev, [msgIndex]: hash }));
-      setTxStatus(prev => ({ ...prev, [msgIndex]: "success" }));
+      setTxHash(prev => ({ ...prev, [key]: hash }));
+      setTxStatus(prev => ({ ...prev, [key]: "success" }));
     } catch (err) {
-      setTxStatus(prev => ({ ...prev, [msgIndex]: "error" }));
+      setTxStatus(prev => ({ ...prev, [key]: "error" }));
       const raw = err instanceof Error ? err.message : "Transaction failed";
       const friendly = friendlyTxError(raw);
-      setTxError(prev => ({ ...prev, [msgIndex]: friendly }));
+      setTxError(prev => ({ ...prev, [key]: friendly }));
       // Add an AI message explaining the failure
       setChat(prev => [...prev, {
         role: "assistant" as const,
@@ -608,24 +610,33 @@ export default function AskPulsePage() {
               </button>
             </div>
 
-            {chat.map((m, i) => (
-              <div key={i}>
-                <MessageBubble msg={m} />
-                {/* Action card for this message */}
-                {m.action && m.role === "assistant" && (
-                  <ActionCard
-                    action={m.action}
-                    msgIndex={i}
-                    status={txStatus[i] ?? "idle"}
-                    hash={txHash[i]}
-                    error={txError[i]}
-                    onExecute={executeAction}
-                    onBridge={handleBridge}
-                    connected={isConnected}
-                  />
-                )}
-              </div>
-            ))}
+            {chat.map((m, i) => {
+              const actions = m.actions?.length ? m.actions : m.action ? [m.action] : [];
+              return (
+                <div key={i}>
+                  <MessageBubble msg={m} />
+                  {/* Action cards for this message */}
+                  {m.role === "assistant" && actions.map((action, ai) => {
+                    const key = `${i}-${ai}`;
+                    return (
+                      <ActionCard
+                        key={key}
+                        action={action}
+                        actionKey={key}
+                        status={txStatus[key] ?? "idle"}
+                        hash={txHash[key]}
+                        error={txError[key]}
+                        onExecute={executeAction}
+                        onBridge={handleBridge}
+                        connected={isConnected}
+                        step={actions.length > 1 ? ai + 1 : undefined}
+                        totalSteps={actions.length > 1 ? actions.length : undefined}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
 
             {/* Legacy bridge action (for messages without structured action) */}
             {showBridgeAction && (
@@ -1169,22 +1180,26 @@ const ACTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElem
 
 function ActionCard({
   action,
-  msgIndex,
+  actionKey,
   status,
   hash,
   error,
   onExecute,
   onBridge,
   connected,
+  step,
+  totalSteps,
 }: {
   action: ActionIntent;
-  msgIndex: number;
+  actionKey: string;
   status: "idle" | "signing" | "pending" | "success" | "error";
   hash?: string;
   error?: string;
-  onExecute: (action: ActionIntent, idx: number) => void;
+  onExecute: (action: ActionIntent, key: string) => void;
   onBridge: () => void;
   connected: boolean;
+  step?: number;
+  totalSteps?: number;
 }) {
   const Icon = ACTION_ICONS[action.type] ?? Zap;
   const isExecuting = status === "signing" || status === "pending";
@@ -1223,7 +1238,13 @@ function ActionCard({
               justifyContent: "center",
             }}
           >
-            <Icon style={{ width: 12, height: 12, color: "#00FF88" }} />
+            {step && totalSteps && totalSteps > 1 ? (
+              <span style={{ fontFamily: "var(--font-jetbrains), monospace", fontSize: 10, fontWeight: 700, color: "#00FF88" }}>
+                {step}/{totalSteps}
+              </span>
+            ) : (
+              <Icon style={{ width: 12, height: 12, color: "#00FF88" }} />
+            )}
           </div>
           <span
             style={{
@@ -1324,7 +1345,7 @@ function ActionCard({
           </div>
         ) : (
           <button
-            onClick={() => action.type === "bridge" ? onBridge() : onExecute(action, msgIndex)}
+            onClick={() => action.type === "bridge" ? onBridge() : onExecute(action, actionKey)}
             disabled={isExecuting}
             style={{
               display: "flex",
