@@ -66,9 +66,8 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 - Deterministic scoring: `ecosystemHealth` is derived from the Pulse Score formula (see `pulse-score.ts`), not an AI opinion
 
 ### What Pulse does not prove
-- **Data provenance**: `dataHash` proves data wasn't modified after commit, it does not cryptographically prove which source produced it.
-
-All sources are public Initia APIs, independently verifiable.          
+- **Data provenance**: `dataHash` proves data wasn't modified after commit, it does not cryptographically prove which source produced it.   
+All sources are public Initia APIs, independently verifiable. 
 - **AI correctness**: The brief is AI-generated analysis, not financial advice. Always DYOR before acting on recommendation.
 
 ### Current trust assumptions
