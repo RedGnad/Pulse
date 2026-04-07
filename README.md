@@ -140,18 +140,6 @@ AI_API_KEY=lm-studio
 
 ---
 
-### Oracle Cron Schedule
-
-The oracle is designed to write snapshots every 5 minutes. However, **Vercel Hobby plan limits cron jobs to 1/day**. For production 5-min intervals:
-
-- **Option A**: Upgrade your hosting infra
-- **Option B**: Use an external cron service
-- **Local dev**: Use `scripts/oracle-cron.ts` for true 5-min scheduling
-
-The oracle code is fully 5-min ready — only the hosting plan limits frequency.
-
----
-
 ### Local Dev Limitation
 
 The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not registered on the Initia explorer or bridge UI**. This is a  limitation for local rollups (https://docs.initia.xyz/hackathon/examples/evm-bank#-native-feature-interwoven-bridge).
@@ -164,5 +152,17 @@ The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not regist
 - **Intended production flow:** In a registered rollup scenario, the bridge allows users to move INIT between L1 and any rollup. The PulseOracle data remains freely readable by any contract or frontend without bridging — the bridge enables asset movement across the Interwoven Network, not oracle access.
 
 **Live demo:** [initiapulse.vercel.app](https://initiapulse.vercel.app) — the full app runs with cached oracle data and AI insights. The rollup + oracle write flow is demonstrated in the [demo video](https://youtu.be/r3Uz-rFKzm0).
+
+---
+
+### Oracle Cron Schedule
+
+The oracle is designed to write snapshots every 5 minutes. However, **Vercel Hobby plan limits cron jobs to 1/day**. For production 5-min intervals:
+
+- **Option A**: Upgrade your hosting infra
+- **Option B**: Use an external cron service
+- **Local dev**: Use `scripts/oracle-cron.ts` for true 5-min scheduling
+
+The oracle code is fully 5-min ready — only the hosting plan limits frequency.
 
 
