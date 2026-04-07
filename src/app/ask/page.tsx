@@ -82,7 +82,7 @@ const CATEGORIES = [
     questions: [
       "Stake 1 INIT on Chorus One",
       "Best validators to stake with for a balanced portfolio?",
-      "Which validators have the lowest commission?",
+      "Unstake 1 INIT from Chorus One then send 1 INIT to alice",
     ],
   },
   {
