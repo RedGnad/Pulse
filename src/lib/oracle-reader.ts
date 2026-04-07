@@ -11,6 +11,7 @@ export interface OracleHistoryEntry {
   totalValidators: number;
   totalTxCount: number;
   ecosystemHealth: string;
+  pulseScoreAvg: number;
   brief: string;
 }
 
@@ -29,13 +30,14 @@ type RawSnap = {
   totalValidators: number;
   totalTxCount: bigint;
   ecosystemHealth: number;
+  pulseScoreAvg: number;
   brief: string;
 };
 
 const HISTORY_ABI = [
   "function snapshotCount() view returns (uint256)",
   "function healthLabel() view returns (string)",
-  "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, bytes32 dataHash, string brief)[50])",
+  "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, uint16 pulseScoreAvg, bytes32 dataHash, string brief)[50])",
 ];
 
 function parseRaw(raw: RawSnap[]): OracleHistoryEntry[] {
@@ -49,6 +51,7 @@ function parseRaw(raw: RawSnap[]): OracleHistoryEntry[] {
       totalValidators: Number(s.totalValidators),
       totalTxCount: Number(s.totalTxCount),
       ecosystemHealth: HEALTH_LABELS[Number(s.ecosystemHealth)] ?? "unknown",
+      pulseScoreAvg: Number(s.pulseScoreAvg),
       brief: s.brief,
     }))
     .reverse(); // newest first
@@ -158,7 +161,7 @@ export async function readOracleHistory(timeoutMs = 2500): Promise<OracleHistory
     const provider = new ethers.JsonRpcProvider(rpcUrl, network, { staticNetwork: network });
 
     const abi = [
-      "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, bytes32 dataHash, string brief)[50])",
+      "function getHistory() view returns (tuple(uint256 timestamp, uint32 blockHeight, uint32 activeMinitilas, uint32 ibcChannels, uint32 totalValidators, uint32 activeProposals, uint64 totalTxCount, uint8 ecosystemHealth, uint16 pulseScoreAvg, bytes32 dataHash, string brief)[50])",
     ];
     const oracle = new ethers.Contract(oracleAddr, abi, provider);
 

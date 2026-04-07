@@ -17,15 +17,9 @@ import { fetchEcosystemData } from "@/lib/initia-registry";
 import { fetchAllMinitiaMetrics } from "@/lib/minitia-api";
 import { fetchL1Data } from "@/lib/l1-api";
 import { generateInsights } from "@/lib/ai";
+import { computeAllPulseScores } from "@/lib/pulse-score";
 import { readOracleData, dumpCacheToFile } from "@/lib/oracle-reader";
 import { EcosystemOverview } from "@/lib/types";
-
-function healthToUint8(health: string): number {
-  if (health === "thriving") return 3;
-  if (health === "growing" || health === "stable") return 2;
-  if (health === "critical") return 1;
-  return 0;
-}
 
 export async function POST(req: Request) {
   const secret = req.headers.get("x-oracle-secret");
@@ -84,13 +78,23 @@ export async function POST(req: Request) {
     const liveMinitias = minitiasWith.filter(m => (m.metrics?.blockHeight ?? 0) > 0);
     const transferChannels = ibcChannels.filter(c => c.portId === "transfer");
 
+    // Deterministic Pulse Score — replaces AI-opinion-based ecosystemHealth
+    const pulseScores = computeAllPulseScores(liveMinitias, ibcChannels);
+    const scoreValues = Array.from(pulseScores.values()).map(s => s.total);
+    const pulseScoreAvg = scoreValues.length > 0
+      ? Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length)
+      : 0;
+    const healthUint = pulseScoreAvg >= 75 ? 3  // thriving
+      : pulseScoreAvg >= 50 ? 2                 // growing
+      : pulseScoreAvg >= 25 ? 1                 // critical
+      : 0;                                      // unknown
+
     const blockHeight = l1Raw.blockHeight;
     const activeMinitias = liveMinitias.length;
     const ibcCount = transferChannels.length;
     const totalValidators = l1Raw.totalValidators;
     const activeProposals = 0;
     const totalTxCount = l1Raw.txCount;
-    const healthUint = healthToUint8(insights.ecosystem_health);
     const brief = insights.daily_brief.slice(0, 400);
 
     // 4. Write to PulseOracle via ethers.js
@@ -110,7 +114,7 @@ export async function POST(req: Request) {
     );
 
     const abi = [
-      "function writeSnapshot(uint32 _blockHeight, uint32 _activeMinitias, uint32 _ibcChannels, uint32 _totalValidators, uint32 _activeProposals, uint64 _totalTxCount, uint8 _ecosystemHealth, bytes32 _dataHash, string calldata _brief) external",
+      "function writeSnapshot(uint32 _blockHeight, uint32 _activeMinitias, uint32 _ibcChannels, uint32 _totalValidators, uint32 _activeProposals, uint64 _totalTxCount, uint8 _ecosystemHealth, uint16 _pulseScoreAvg, bytes32 _dataHash, string calldata _brief) external",
       "function snapshotCount() view returns (uint256)",
     ];
 
@@ -124,6 +128,7 @@ export async function POST(req: Request) {
       activeProposals,
       totalTxCount,
       healthUint,
+      pulseScoreAvg,
       dataHash,
       brief,
       { gasPrice: 0 }
@@ -149,7 +154,8 @@ export async function POST(req: Request) {
         ibcChannels: ibcCount,
         totalValidators,
         totalTxCount,
-        ecosystemHealth: insights.ecosystem_health,
+        ecosystemHealth: healthUint,
+        pulseScoreAvg,
         brief: brief.slice(0, 80) + "…",
       },
     });

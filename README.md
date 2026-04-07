@@ -57,6 +57,44 @@ Initia Pulse is an AI-powered on-chain intelligence layer for the Initia ecosyst
 └─────────────────────────────────────────────┘
 ```
 
+## Trust Model
+
+### What Pulse proves
+- Data integrity: `dataHash` (keccak256 commitment) ensures snapshot data hasn't been modified after on-chain commit
+- Temporal ordering: snapshots are timestamped and sequenced in a circular buffer
+- Deterministic scoring: `ecosystemHealth` is derived from the Pulse Score formula (see `pulse-score.ts`), not an AI opinion
+
+### What Pulse does not prove
+- Data authenticity: the hash proves integrity, not that the source data is correct
+- AI reasoning correctness: the brief is AI-generated context, not a verified claim
+
+### Current trust assumptions
+- Single backend signer writes snapshots (writer key)
+- Data sources: Initia registry, L1 RPC, minitia RPCs (all public endpoints)
+- Multi-writer architecture is implemented in the contract (`setWriter`) for future multi-oracle scenarios
+
+### Decentralization path
+- v2: Multiple independent writers with quorum (2-of-3 agreement required)
+- v3: On-chain data verification via L1 light client proofs
+
+---
+
+## Composability: PulseGate
+
+`PulseGate.sol` demonstrates how any DeFi protocol can consume PulseOracle's composable primitives:
+
+```solidity
+// Only allow deposits when ecosystem is healthy
+require(oracle.isHealthy(2, 3), "PulseGate: ecosystem health too low");
+
+// Emergency mode detection
+bool emergency = !oracle.isHealthy(1, 1);
+```
+
+See `contracts/PulseGate.sol` for the full implementation.
+
+---
+
 ## AI Configuration
 
 Pulse supports **any LLM provider** — Anthropic, OpenAI, or any OpenAI-compatible API (Ollama, LM Studio, Groq, Together, etc.).
@@ -99,6 +137,18 @@ AI_API_KEY=lm-studio
 - **Frontend**: Next.js 16, TypeScript, InterwovenKit v2, wagmi, TanStack Query
 - **AI**: Multi-provider (Anthropic, OpenAI, Ollama, LM Studio, Groq, or any OpenAI-compatible API), built for multi-agentic analysis
 - **Native Features**: Interwoven Bridge via `openBridge()` + Auto-Signing via `submitTxBlock` with natural language intent parsing
+
+---
+
+### Oracle Cron Schedule
+
+The oracle is designed to write snapshots every 5 minutes. However, **Vercel Hobby plan limits cron jobs to 1/day**. For production 5-min intervals:
+
+- **Option A**: Upgrade to Vercel Pro (supports `*/5 * * * *` cron)
+- **Option B**: Use an external cron service (cron-job.org, UptimeRobot, etc.) hitting `POST /api/oracle/cron` with header `authorization: Bearer $CRON_SECRET`
+- **Local dev**: Use `scripts/oracle-cron.ts` for true 5-min scheduling
+
+The oracle code is fully 5-min ready — only the hosting plan limits frequency.
 
 ---
 

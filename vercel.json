@@ -1,4 +1,5 @@
 {
+  "$comment": "Vercel Hobby plan limits cron to 1/day. For 5-min intervals, use an external cron service (e.g. cron-job.org, UptimeRobot) pointing to POST /api/oracle/cron with header 'authorization: Bearer $CRON_SECRET'. The oracle code already supports 5-min granularity — see scripts/oracle-cron.ts for local dev.",
   "crons": [
     {
       "path": "/api/oracle/cron",

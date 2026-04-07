@@ -17,6 +17,7 @@ contract PulseOracle {
         uint32  activeProposals;
         uint64  totalTxCount;
         uint8   ecosystemHealth; // 3=thriving, 2=growing, 1=critical, 0=unknown
+        uint16  pulseScoreAvg;   // 0-100, deterministic avg of all live minitia Pulse Scores
         bytes32 dataHash;        // keccak256 of raw off-chain data — proves AI output integrity
         string  brief;
     }
@@ -61,6 +62,7 @@ contract PulseOracle {
         uint32 _activeProposals,
         uint64 _totalTxCount,
         uint8  _ecosystemHealth,
+        uint16 _pulseScoreAvg,
         bytes32 _dataHash,
         string calldata _brief
     ) external onlyWriter {
@@ -73,6 +75,7 @@ contract PulseOracle {
             activeProposals: _activeProposals,
             totalTxCount: _totalTxCount,
             ecosystemHealth: _ecosystemHealth,
+            pulseScoreAvg: _pulseScoreAvg,
             dataHash: _dataHash,
             brief: _brief
         });

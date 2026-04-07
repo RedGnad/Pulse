@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Vote } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
 import { useNetwork } from "@/contexts/network-context";
 
@@ -185,6 +185,10 @@ export function Header() {
             </NavLink>
             <NavLink href="/oracle" active={pathname === "/oracle"} step="02">Verify</NavLink>
             <NavLink href="/advisor" active={pathname.startsWith("/advisor")} step="03">Act</NavLink>
+            <NavLink href="/governance" active={pathname === "/governance"} step="04">
+              <Vote style={{ width: 12, height: 12 }} />
+              Gov
+            </NavLink>
           </span>
 
           <div style={{ width: 1, height: 18, background: "rgba(0,255,136,0.08)", margin: "0 8px" }} />
