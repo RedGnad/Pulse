@@ -115,8 +115,8 @@ const CATEGORIES = [
     icon: Vote,
     label: "Governance",
     questions: [
-      "Analyze active governance proposals for me",
-      "Are there any proposals I should vote on?",
+      "What proposals are open — can I vote from here?",
+      "Are there any proposals I should know about?",
       "How does L1 governance work on Initia?",
     ],
   },
