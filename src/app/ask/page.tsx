@@ -116,7 +116,7 @@ const CATEGORIES = [
     icon: BarChart3,
     label: "Data",
     questions: [
-      "Send 0.1 INIT to @alice.init",
+      "Send 0.1 INIT to @alice",
       "What proposals are open — can I vote from here?",
       "Where are my staked funds?",
     ],
