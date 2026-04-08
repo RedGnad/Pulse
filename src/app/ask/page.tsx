@@ -512,7 +512,7 @@ export default function AskPulsePage() {
                 >
                   AI-powered intelligence with live ecosystem data.
                   <br />
-                  Ask anything about Initia — perform staking, bridging,
+                  Ask anything about Initia — execute staking, bridging,
                   governance, or monitoring.
                 </p>
 
