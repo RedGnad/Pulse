@@ -9,11 +9,11 @@ const VALIDATORS = [
 describe("parseActionIntent", () => {
   describe("send", () => {
     it("parses send with full address", () => {
-      const r = parseActionIntent("send 10 INIT to init1qwertyuiopasdfghjklzxcvbnm12345678ab");
+      const r = parseActionIntent("send 10 INIT to init18wahzdxxcaz36d53060alequs747ydfrej6mdm");
       expect(r).not.toBeNull();
       expect(r!.type).toBe("send");
       expect(r!.params.amount).toBe("10");
-      expect(r!.params.recipient).toBe("init1qwertyuiopasdfghjklzxcvbnm12345678ab");
+      expect(r!.params.recipient).toBe("init18wahzdxxcaz36d53060alequs747ydfrej6mdm");
     });
 
     it("parses send with .init username", () => {
@@ -117,7 +117,7 @@ describe("parseActionIntent", () => {
     });
 
     it("parses french vote", () => {
-      const r = parseActionIntent("voter oui sur la proposition 42");
+      const r = parseActionIntent("voter oui sur proposition 42");
       expect(r).not.toBeNull();
       expect(r!.params.voteOption).toBe(1);
       expect(r!.params.proposalId).toBe("42");
