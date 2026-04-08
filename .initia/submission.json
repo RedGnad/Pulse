@@ -1,7 +1,7 @@
 {
   "project_name": "Initia Pulse",
   "repo_url": "https://github.com/RedGnad/Pulse",
-  "commit_sha": "474276b",
+  "commit_sha": "8c8e056",
   "rollup_chain_id": "initia-pulse-1",
   "deployed_address": "0xB7C25af401137597C896685Fc195e0143c54de7A",
   "vm": "evm",
