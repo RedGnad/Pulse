@@ -169,10 +169,13 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
         return govSection[1].trim();
       }
       // No active proposals — inform user about the feature
-      return `There are no proposals currently in voting period on ${network}. When governance proposals open, I can break down each proposal for you — explaining what it changes, who it impacts, and the pros and cons — so you can make an informed decision before casting your vote.\n\nJust ask "explain proposal #42" and I'll give you a clear brief. Then say "vote yes on proposal #42" to vote on-chain via PulseGov.`;
+      return `No proposals in voting period right now on ${network}. When they open, I can:\n\n• **List** active proposals — "show proposals"\n• **Explain** any proposal — "explain proposal #42"\n• **Vote** on-chain — "vote yes on proposal #42"\n\nAll votes go through PulseGov on the Pulse EVM rollup.`;
     }
-    return `Initia governance lets token holders vote on protocol changes. When proposals are active, I can analyze each one for you — explaining the implications and trade-offs — so you don't vote blind.\n\n`
-      + `Just ask "explain proposal #42" for a brief, then "vote yes on proposal #42" to cast your vote on-chain via PulseGov.`;
+    return `No proposals in voting period right now. When they open, I can:\n\n`
+      + `• **List** active proposals — "show proposals"\n`
+      + `• **Explain** any proposal — "explain proposal #42"\n`
+      + `• **Vote** on-chain — "vote yes on proposal #42"\n\n`
+      + `All votes go through PulseGov on the Pulse EVM rollup.`;
   }
 
   // ── Generic topic questions ──
