@@ -127,7 +127,8 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
   const connections = useMemo(() => {
     return nodePositions.map(node => {
       const path = bezierPath(cx, cy, node.x, node.y, 0.15);
-      return { nodeId: node.id, path, color: node.color, isLive: node.isLive, channelCount: node.channelCount };
+      const hasScore = node.pulseScore !== null && node.pulseScore > 0;
+      return { nodeId: node.id, path, color: node.color, isLive: node.isLive, channelCount: node.channelCount, hasScore };
     });
   }, [nodePositions, cx, cy]);
 
@@ -179,10 +180,12 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
         {connections.map((conn, ci) => {
           const isActive = conn.nodeId === activeNodeId;
           const isFocused = activeNodeId !== null;
+          const isDead = conn.isLive && !conn.hasScore;
           const opacity = isActive ? 0.5
             : isFocused ? 0.05
+            : isDead ? 0.04
             : conn.isLive ? 0.12 : 0.08;
-          const strokeW = isActive ? 2 : conn.isLive ? (0.8 + conn.channelCount * 0.3) : 0.5;
+          const strokeW = isActive ? 2 : isDead ? 0.3 : conn.isLive ? (0.8 + conn.channelCount * 0.3) : 0.5;
 
           return (
             <path key={`conn-${conn.nodeId}-${n}`}
@@ -201,7 +204,7 @@ export function IbcFlowMap({ ibcChannels, minitias, onSelect, selectedChain, hei
         })}
 
         {/* Animated flow particles — use CSS animation on <g> to sync with line entry */}
-        {connections.filter(c => c.isLive).map((conn, i) => {
+        {connections.filter(c => c.isLive && c.hasScore).map((conn, i) => {
           const ci = connections.indexOf(conn);
           const lineEnteredAt = ci * 0.08 + 0.6; // CSS-based: when connection line is fully visible
           const isActive = conn.nodeId === activeNodeId;

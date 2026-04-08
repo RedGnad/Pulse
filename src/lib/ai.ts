@@ -158,6 +158,23 @@ function mockChatReply(data?: EcosystemOverview, message?: string): string {
     return `To check your staking positions, connect your wallet first. Once connected, I can query your delegations on Initia L1 and show you exactly where your INIT is staked.`;
   }
 
+  // ── Governance / proposal / vote queries ──
+  if (q.includes("governance") || q.includes("proposal") || q.includes("vote") || q.includes("voting") || q.includes("gouvernance") || q.includes("proposition")) {
+    // Extract governance context injected by the route
+    const govSection = (message ?? "").match(/\[GOVERNANCE\]([\s\S]*?)$/i)
+      || (message ?? "").match(/\[ACTIVE GOVERNANCE PROPOSALS[^\]]*\]([\s\S]*?)$/i);
+    if (govSection) {
+      // Active proposals present
+      if (q.includes("[active governance proposals")) {
+        return govSection[1].trim();
+      }
+      // No active proposals — inform user about the feature
+      return `There are no proposals currently in voting period on ${network}. When governance proposals open, I can break down each proposal for you — explaining what it changes, who it impacts, and the pros and cons — so you can make an informed decision before casting your vote.\n\nJust ask "explain proposal #42" and I'll give you a clear brief. Then say "vote yes on proposal #42" to vote on-chain via PulseGov.`;
+    }
+    return `Initia governance lets token holders vote on protocol changes. When proposals are active, I can analyze each one for you — explaining the implications and trade-offs — so you don't vote blind.\n\n`
+      + `Just ask "explain proposal #42" for a brief, then "vote yes on proposal #42" to cast your vote on-chain via PulseGov.`;
+  }
+
   // ── Generic topic questions ──
 
   // Deploy questions

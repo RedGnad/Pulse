@@ -82,7 +82,10 @@ const CATEGORIES = [
     questions: [
       "Stake 1 INIT on Chorus One",
       "Best validators to stake with for a balanced portfolio?",
-      "Unstake 1 INIT from Chorus One then send 1 INIT to alice",
+      {
+        display: "Unstake 1 INIT from Chorus One then send 1 INIT to @alice",
+        value: "Unstake 1 INIT from Chorus One then send 1 INIT to @alice",
+      },
     ],
   },
   {
@@ -116,7 +119,10 @@ const CATEGORIES = [
     icon: BarChart3,
     label: "Data",
     questions: [
-      "Send 0.1 INIT to @alice",
+      {
+        display: "Send 0.1 INIT to init1ajx...0q",
+        value: "Send 0.1 INIT to init1ajxy7nlac0k2p88qrlng5xq5aptaz5sc0g6d0q",
+      },
       "What proposals are open — can I vote from here?",
       "Where are my staked funds?",
     ],
@@ -131,7 +137,11 @@ function friendlyTxError(raw: string): string {
     return "Insufficient balance. You don't have enough INIT for this transaction.";
   if (r.includes("out of gas") || r.includes("gas cannot be zero"))
     return "Transaction ran out of gas. Please try again.";
-  if (r.includes("user rejected") || r.includes("user denied") || r.includes("user cancel"))
+  if (
+    r.includes("user rejected") ||
+    r.includes("user denied") ||
+    r.includes("user cancel")
+  )
     return "Transaction cancelled.";
   if (r.includes("sequence mismatch") || r.includes("account sequence"))
     return "Sequence error — please wait a few seconds and try again.";
@@ -148,11 +158,22 @@ export default function AskPulsePage() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const { openBridge, requestTxSync, submitTxBlock, estimateGas, autoSign, initiaAddress, isConnected, openConnect } = useInterwovenKit();
+  const {
+    openBridge,
+    requestTxSync,
+    submitTxBlock,
+    estimateGas,
+    autoSign,
+    initiaAddress,
+    isConnected,
+    openConnect,
+  } = useInterwovenKit();
   const { data: ecosystem } = useEcosystem();
   const { username } = useUsername(initiaAddress);
   const { network } = useNetwork();
-  const [txStatus, setTxStatus] = useState<Record<string, "idle" | "signing" | "pending" | "success" | "error">>({});
+  const [txStatus, setTxStatus] = useState<
+    Record<string, "idle" | "signing" | "pending" | "success" | "error">
+  >({});
   const [txHash, setTxHash] = useState<Record<string, string>>({});
   const [txError, setTxError] = useState<Record<string, string>>({});
 
@@ -169,7 +190,11 @@ export default function AskPulsePage() {
       const text = (msg ?? input).trim();
       if (!text || loading) return;
       setInput("");
-      const userMsg: ChatMsg = { role: "user", content: text, timestamp: Date.now() };
+      const userMsg: ChatMsg = {
+        role: "user",
+        content: text,
+        timestamp: Date.now(),
+      };
       const newChat = [...chat, userMsg];
       setChat(newChat);
       setLoading(true);
@@ -192,17 +217,25 @@ export default function AskPulsePage() {
         });
         const json = await res.json();
         const response = json.response || json.error;
-        const actions: ActionIntent[] = json.actions ?? (json.action ? [json.action] : []);
+        const actions: ActionIntent[] =
+          json.actions ?? (json.action ? [json.action] : []);
         setChat([
           ...newChat,
-          { role: "assistant", content: response, timestamp: Date.now(), action: actions[0] ?? null, actions },
+          {
+            role: "assistant",
+            content: response,
+            timestamp: Date.now(),
+            action: actions[0] ?? null,
+            actions,
+          },
         ]);
       } catch {
         setChat([
           ...newChat,
           {
             role: "assistant",
-            content: "Connection error. The ecosystem data feed may be temporarily unavailable.",
+            content:
+              "Connection error. The ecosystem data feed may be temporarily unavailable.",
             timestamp: Date.now(),
           },
         ]);
@@ -210,7 +243,7 @@ export default function AskPulsePage() {
         setLoading(false);
       }
     },
-    [chat, input, loading, network]
+    [chat, input, loading, network],
   );
 
   function handleBridge() {
@@ -219,123 +252,161 @@ export default function AskPulsePage() {
 
   const { writeContractAsync } = useWriteContract();
 
-  const executeAction = useCallback(async (action: ActionIntent, key: string) => {
-    if (!isConnected) { openConnect(); return; }
-
-    if (action.type === "bridge") {
-      openBridge({ srcChainId: "initiation-2", srcDenom: "uinit" });
-      return;
-    }
-
-    // Vote action — uses wagmi writeContract on PulseGov (EVM rollup)
-    if (action.type === "vote") {
-      setTxStatus(prev => ({ ...prev, [key]: "signing" }));
-      try {
-        const hash = await writeContractAsync({
-          address: PULSE_GOV_ADDRESS as `0x${string}`,
-          abi: PULSE_GOV_ABI,
-          functionName: "vote",
-          args: [BigInt(action.params.proposalId ?? "0"), action.params.voteOption ?? 1],
-          chainId: initiaPulse.id,
-        });
-        setTxHash(prev => ({ ...prev, [key]: hash }));
-        setTxStatus(prev => ({ ...prev, [key]: "success" }));
-      } catch (err) {
-        setTxStatus(prev => ({ ...prev, [key]: "error" }));
-        const raw = err instanceof Error ? err.message : "Vote transaction failed";
-        setTxError(prev => ({ ...prev, [key]: friendlyTxError(raw) }));
-      }
-      return;
-    }
-
-    setTxStatus(prev => ({ ...prev, [key]: "signing" }));
-
-    try {
-      const chainId = action.chainId || "initiation-2";
-      const amountMicro = String(Math.floor(parseFloat(action.params.amount || "0") * 1_000_000));
-
-      let messages: { typeUrl: string; value: unknown }[];
-
-      if (action.type === "send") {
-        messages = [{
-          typeUrl: "/cosmos.bank.v1beta1.MsgSend",
-          value: {
-            fromAddress: initiaAddress,
-            toAddress: action.params.recipient,
-            amount: [{ denom: "uinit", amount: amountMicro }],
-          },
-        }];
-      } else if (action.type === "stake" || action.type === "unstake") {
-        if (!action.params.validator) {
-          setTxStatus(prev => ({ ...prev, [key]: "error" }));
-          setTxError(prev => ({ ...prev, [key]: "Validator address not resolved. Use a full initvaloper address." }));
-          return;
-        }
-        const typeUrl = action.type === "stake"
-          ? "/initia.mstaking.v1.MsgDelegate"
-          : "/initia.mstaking.v1.MsgUndelegate";
-        messages = [{
-          typeUrl,
-          value: {
-            delegatorAddress: initiaAddress,
-            validatorAddress: action.params.validator,
-            amount: [{ denom: "uinit", amount: amountMicro }],
-          },
-        }];
-      } else {
+  const executeAction = useCallback(
+    async (action: ActionIntent, key: string) => {
+      if (!isConnected) {
+        openConnect();
         return;
       }
 
-      // Enable auto-sign session for this chain if not already active
-      if (!autoSign?.isEnabledByChain?.[chainId]) {
-        await autoSign?.enable(chainId);
+      if (action.type === "bridge") {
+        openBridge({ srcChainId: "initiation-2", srcDenom: "uinit" });
+        return;
       }
 
-      const isAutoSignActive = !!autoSign?.isEnabledByChain?.[chainId];
+      // Vote action — uses wagmi writeContract on PulseGov (EVM rollup)
+      if (action.type === "vote") {
+        setTxStatus((prev) => ({ ...prev, [key]: "signing" }));
+        try {
+          const hash = await writeContractAsync({
+            address: PULSE_GOV_ADDRESS as `0x${string}`,
+            abi: PULSE_GOV_ABI,
+            functionName: "vote",
+            args: [
+              BigInt(action.params.proposalId ?? "0"),
+              action.params.voteOption ?? 1,
+            ],
+            chainId: initiaPulse.id,
+          });
+          setTxHash((prev) => ({ ...prev, [key]: hash }));
+          setTxStatus((prev) => ({ ...prev, [key]: "success" }));
+        } catch (err) {
+          setTxStatus((prev) => ({ ...prev, [key]: "error" }));
+          const raw =
+            err instanceof Error ? err.message : "Vote transaction failed";
+          setTxError((prev) => ({ ...prev, [key]: friendlyTxError(raw) }));
+        }
+        return;
+      }
 
-      setTxStatus(prev => ({ ...prev, [key]: "pending" }));
+      setTxStatus((prev) => ({ ...prev, [key]: "signing" }));
 
-      let hash: string;
-      if (isAutoSignActive) {
-        // Auto-sign active → submitTxBlock (never shows popup)
-        // Manual gas estimation required (official pattern from docs + Hunch)
-        const gasEstimate = await estimateGas({ messages, chainId });
-        const fee = calculateFee(
-          Math.ceil(gasEstimate * 1.4),
-          GasPrice.fromString("0.015uinit"),
+      try {
+        const chainId = action.chainId || "initiation-2";
+        const amountMicro = String(
+          Math.floor(parseFloat(action.params.amount || "0") * 1_000_000),
         );
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result: any = await submitTxBlock({ messages, fee, chainId });
-        hash = result?.transactionHash ?? result?.txhash ?? "";
-      } else {
-        // No auto-sign → requestTxSync (shows wallet popup)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        hash = await (requestTxSync as any)({ messages, chainId });
+
+        let messages: { typeUrl: string; value: unknown }[];
+
+        if (action.type === "send") {
+          messages = [
+            {
+              typeUrl: "/cosmos.bank.v1beta1.MsgSend",
+              value: {
+                fromAddress: initiaAddress,
+                toAddress: action.params.recipient,
+                amount: [{ denom: "uinit", amount: amountMicro }],
+              },
+            },
+          ];
+        } else if (action.type === "stake" || action.type === "unstake") {
+          if (!action.params.validator) {
+            setTxStatus((prev) => ({ ...prev, [key]: "error" }));
+            setTxError((prev) => ({
+              ...prev,
+              [key]:
+                "Validator address not resolved. Use a full initvaloper address.",
+            }));
+            return;
+          }
+          const typeUrl =
+            action.type === "stake"
+              ? "/initia.mstaking.v1.MsgDelegate"
+              : "/initia.mstaking.v1.MsgUndelegate";
+          messages = [
+            {
+              typeUrl,
+              value: {
+                delegatorAddress: initiaAddress,
+                validatorAddress: action.params.validator,
+                amount: [{ denom: "uinit", amount: amountMicro }],
+              },
+            },
+          ];
+        } else {
+          return;
+        }
+
+        // Enable auto-sign session for this chain if not already active
+        if (!autoSign?.isEnabledByChain?.[chainId]) {
+          await autoSign?.enable(chainId);
+        }
+
+        const isAutoSignActive = !!autoSign?.isEnabledByChain?.[chainId];
+
+        setTxStatus((prev) => ({ ...prev, [key]: "pending" }));
+
+        let hash: string;
+        if (isAutoSignActive) {
+          // Auto-sign active → submitTxBlock (never shows popup)
+          // Manual gas estimation required (official pattern from docs + Hunch)
+          const gasEstimate = await estimateGas({ messages, chainId });
+          const fee = calculateFee(
+            Math.ceil(gasEstimate * 1.4),
+            GasPrice.fromString("0.015uinit"),
+          );
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const result: any = await submitTxBlock({ messages, fee, chainId });
+          hash = result?.transactionHash ?? result?.txhash ?? "";
+        } else {
+          // No auto-sign → requestTxSync (shows wallet popup)
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          hash = await (requestTxSync as any)({ messages, chainId });
+        }
+        setTxHash((prev) => ({ ...prev, [key]: hash }));
+        setTxStatus((prev) => ({ ...prev, [key]: "success" }));
+      } catch (err) {
+        setTxStatus((prev) => ({ ...prev, [key]: "error" }));
+        const raw = err instanceof Error ? err.message : "Transaction failed";
+        const friendly = friendlyTxError(raw);
+        setTxError((prev) => ({ ...prev, [key]: friendly }));
+        // Add an AI message explaining the failure
+        setChat((prev) => [
+          ...prev,
+          {
+            role: "assistant" as const,
+            content: `**Transaction failed:** ${friendly}\n\nThis can happen if you don't have enough INIT to cover the amount + gas fees, if auto-sign session expired, or if the network is congested. You can try again — if the issue persists, try disconnecting and reconnecting your wallet to reset the session.`,
+            timestamp: Date.now(),
+          },
+        ]);
       }
-      setTxHash(prev => ({ ...prev, [key]: hash }));
-      setTxStatus(prev => ({ ...prev, [key]: "success" }));
-    } catch (err) {
-      setTxStatus(prev => ({ ...prev, [key]: "error" }));
-      const raw = err instanceof Error ? err.message : "Transaction failed";
-      const friendly = friendlyTxError(raw);
-      setTxError(prev => ({ ...prev, [key]: friendly }));
-      // Add an AI message explaining the failure
-      setChat(prev => [...prev, {
-        role: "assistant" as const,
-        content: `**Transaction failed:** ${friendly}\n\nThis can happen if you don't have enough INIT to cover the amount + gas fees, if auto-sign session expired, or if the network is congested. You can try again — if the issue persists, try disconnecting and reconnecting your wallet to reset the session.`,
-        timestamp: Date.now(),
-      }]);
-    }
-  }, [isConnected, openConnect, openBridge, autoSign, initiaAddress, requestTxSync, submitTxBlock, estimateGas, writeContractAsync]);
+    },
+    [
+      isConnected,
+      openConnect,
+      openBridge,
+      autoSign,
+      initiaAddress,
+      requestTxSync,
+      submitTxBlock,
+      estimateGas,
+      writeContractAsync,
+    ],
+  );
 
   const lastMsg = chat.length > 0 ? chat[chat.length - 1] : null;
   const showBridgeAction =
-    lastMsg?.role === "assistant" && !lastMsg.action && /bridge|transfer|move.*init/i.test(lastMsg.content);
+    lastMsg?.role === "assistant" &&
+    !lastMsg.action &&
+    /bridge|transfer|move.*init/i.test(lastMsg.content);
 
   const hasMessages = chat.length > 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>
+    <div
+      style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}
+    >
       <div
         style={{
           flex: 1,
@@ -374,358 +445,427 @@ export default function AskPulsePage() {
             zIndex: 1,
           }}
         >
-        {/* Empty state — hero + categories */}
-        {!hasMessages && (
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-start",
-              alignItems: "center",
-              paddingTop: 40,
-              paddingBottom: 180,
-              overflowY: "auto",
-              animation: "fade-in 0.6s ease-out",
-            }}
-          >
-            {/* Hero */}
+          {/* Empty state — hero + categories */}
+          {!hasMessages && (
             <div
               style={{
+                flex: 1,
                 display: "flex",
                 flexDirection: "column",
+                justifyContent: "flex-start",
                 alignItems: "center",
-                gap: 16,
-                marginBottom: 48,
+                paddingTop: 40,
+                paddingBottom: 180,
+                overflowY: "auto",
+                animation: "fade-in 0.6s ease-out",
               }}
             >
+              {/* Hero */}
               <div
                 style={{
-                  width: 64,
-                  height: 64,
-                  borderRadius: 16,
-                  background: "rgba(0,255,136,0.06)",
-                  border: "1px solid rgba(0,255,136,0.15)",
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow: "0 0 40px rgba(0,255,136,0.08)",
-                }}
-              >
-                <Sparkles style={{ width: 28, height: 28, color: "#00FF88" }} />
-              </div>
-              <h1
-                style={{
-                  fontFamily: "var(--font-chakra), sans-serif",
-                  fontSize: 36,
-                  fontWeight: 700,
-                  color: "#E0F0FF",
-                  margin: 0,
-                  letterSpacing: "-0.02em",
-                }}
-              >
-                Ask Pulse
-              </h1>
-              <p
-                style={{
-                  fontFamily: "var(--font-jetbrains), monospace",
-                  fontSize: 13,
-                  color: "#8AB4C8",
-                  margin: 0,
-                  textAlign: "center",
-                  lineHeight: 1.6,
-                  maxWidth: 440,
-                }}
-              >
-                AI-powered intelligence with live ecosystem data.
-                <br />
-                Ask anything about Initia — staking, bridging, governance, or monitoring.
-              </p>
-
-              {/* Connected user identity */}
-              {isConnected && initiaAddress && (
-                <p style={{
-                  fontFamily: "var(--font-jetbrains), monospace",
-                  fontSize: 12,
-                  color: username ? "#00FF88" : "#5A7A8A",
-                  margin: 0,
-                }}>
-                  {username
-                    ? `Connected as @${username}`
-                    : `${initiaAddress.slice(0, 12)}...${initiaAddress.slice(-4)}`}
-                </p>
-              )}
-
-              {/* Live data indicator */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  padding: "6px 14px",
-                  border: "1px solid rgba(0,255,136,0.1)",
-                  borderRadius: 20,
-                  background: "rgba(0,255,136,0.03)",
-                  marginTop: 4,
-                }}
-              >
-                <span
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: "#00FF88",
-                    boxShadow: "0 0 8px #00FF88",
-                    animation: "pulse-glow-green 2s infinite",
-                  }}
-                />
-                <span
-                  style={{
-                    fontFamily: "var(--font-jetbrains), monospace",
-                    fontSize: 12,
-                    color: "#00FF88",
-                    letterSpacing: "0.08em",
-                  }}
-                >
-                  Connected to live ecosystem feed
-                </span>
-              </div>
-
-              {/* Live Pulse Scores summary */}
-              {ecosystem?.minitias && (() => {
-                const scored = ecosystem.minitias
-                  .filter(m => m.pulseScore && (m.metrics?.blockHeight ?? 0) > 0)
-                  .sort((a, b) => (b.pulseScore?.total ?? 0) - (a.pulseScore?.total ?? 0))
-                  .slice(0, 5);
-                if (!scored.length) return null;
-                return (
-                  <div style={{
-                    display: "flex", alignItems: "center", gap: 16,
-                    padding: "8px 16px",
-                    border: "1px solid rgba(255,255,255,0.04)",
-                    borderRadius: 8,
-                    background: "rgba(255,255,255,0.01)",
-                    marginTop: 4,
-                  }}>
-                    <span style={{
-                      fontFamily: "var(--font-jetbrains), monospace",
-                      fontSize: 11, color: "#3A5A6A",
-                      letterSpacing: "0.1em",
-                    }}>
-                      PULSE SCORES
-                    </span>
-                    {scored.map(m => (
-                      <div key={m.chainId} style={{
-                        display: "flex", alignItems: "center", gap: 5,
-                      }}>
-                        <span style={{
-                          fontFamily: "var(--font-jetbrains), monospace",
-                          fontSize: 12, color: "#5A7A8A",
-                        }}>
-                          {m.prettyName}
-                        </span>
-                        <span style={{
-                          fontFamily: "var(--font-jetbrains), monospace",
-                          fontSize: 14, fontWeight: 700,
-                          color: scoreColor(m.pulseScore?.total ?? 0),
-                        }}>
-                          {m.pulseScore?.total}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Category grid */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: 12,
-                width: "100%",
-                maxWidth: 700,
-              }}
-            >
-              {CATEGORIES.map((cat) => (
-                <CategoryCard
-                  key={cat.label}
-                  icon={cat.icon}
-                  label={cat.label}
-                  questions={cat.questions}
-                  onSelect={sendMessage}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Chat messages */}
-        {hasMessages && (
-          <div
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              paddingTop: 16,
-              paddingBottom: 140,
-              display: "flex",
-              flexDirection: "column",
-              gap: 24,
-            }}
-          >
-            {/* Chat header with title + new chat */}
-            <div style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "8px 0", borderBottom: "1px solid rgba(0,255,136,0.06)",
-              marginBottom: 8,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <Sparkles style={{ width: 14, height: 14, color: "#00FF88" }} />
-                <span style={{
-                  fontFamily: "var(--font-chakra), sans-serif",
-                  fontSize: 15, fontWeight: 700, color: "#E0F0FF",
-                }}>Ask Pulse</span>
-                <span style={{
-                  fontFamily: "var(--font-jetbrains), monospace",
-                  fontSize: 11, color: "#3A5A6A",
-                }}>{chat.filter(m => m.role === "user").length} messages</span>
-              </div>
-              <button
-                onClick={() => setChat([])}
-                style={{
-                  display: "flex", alignItems: "center", gap: 5,
-                  padding: "5px 12px", borderRadius: 4,
-                  border: "1px solid rgba(0,255,136,0.1)",
-                  background: "rgba(0,255,136,0.03)",
-                  cursor: "pointer",
-                  fontFamily: "var(--font-jetbrains), monospace",
-                  fontSize: 11, color: "#5A7A8A",
-                  transition: "all 0.15s",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(0,255,136,0.25)"; e.currentTarget.style.color = "#00FF88"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(0,255,136,0.1)"; e.currentTarget.style.color = "#5A7A8A"; }}
-              >
-                New chat
-              </button>
-            </div>
-
-            {chat.map((m, i) => {
-              const actions = m.actions?.length ? m.actions : m.action ? [m.action] : [];
-              return (
-                <div key={i}>
-                  <MessageBubble msg={m} />
-                  {/* Action cards for this message */}
-                  {m.role === "assistant" && actions.map((action, ai) => {
-                    const key = `${i}-${ai}`;
-                    return (
-                      <ActionCard
-                        key={key}
-                        action={action}
-                        actionKey={key}
-                        status={txStatus[key] ?? "idle"}
-                        hash={txHash[key]}
-                        error={txError[key]}
-                        onExecute={executeAction}
-                        onBridge={handleBridge}
-                        connected={isConnected}
-                        step={actions.length > 1 ? ai + 1 : undefined}
-                        totalSteps={actions.length > 1 ? actions.length : undefined}
-                      />
-                    );
-                  })}
-                </div>
-              );
-            })}
-
-            {/* Legacy bridge action (for messages without structured action) */}
-            {showBridgeAction && (
-              <div style={{ display: "flex", paddingLeft: 44 }}>
-                <button
-                  onClick={handleBridge}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "10px 18px",
-                    borderRadius: 8,
-                    background: "rgba(0,255,136,0.06)",
-                    border: "1px solid rgba(0,255,136,0.2)",
-                    cursor: "pointer",
-                    fontFamily: "var(--font-jetbrains), monospace",
-                    fontSize: 12,
-                    color: "#00FF88",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "rgba(0,255,136,0.12)";
-                    e.currentTarget.style.borderColor = "rgba(0,255,136,0.35)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "rgba(0,255,136,0.06)";
-                    e.currentTarget.style.borderColor = "rgba(0,255,136,0.2)";
-                  }}
-                >
-                  <ArrowLeftRight style={{ width: 14, height: 14 }} />
-                  Open Bridge — Transfer INIT
-                </button>
-              </div>
-            )}
-
-            {/* Loading indicator */}
-            {loading && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 12,
-                  paddingLeft: 0,
+                  gap: 16,
+                  marginBottom: 48,
                 }}
               >
                 <div
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 8,
+                    width: 64,
+                    height: 64,
+                    borderRadius: 16,
                     background: "rgba(0,255,136,0.06)",
-                    border: "1px solid rgba(0,255,136,0.12)",
+                    border: "1px solid rgba(0,255,136,0.15)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    flexShrink: 0,
+                    boxShadow: "0 0 40px rgba(0,255,136,0.08)",
                   }}
                 >
-                  <Sparkles style={{ width: 14, height: 14, color: "#00FF88" }} />
+                  <Sparkles
+                    style={{ width: 28, height: 28, color: "#00FF88" }}
+                  />
                 </div>
+                <h1
+                  style={{
+                    fontFamily: "var(--font-chakra), sans-serif",
+                    fontSize: 36,
+                    fontWeight: 700,
+                    color: "#E0F0FF",
+                    margin: 0,
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  Ask Pulse
+                </h1>
+                <p
+                  style={{
+                    fontFamily: "var(--font-jetbrains), monospace",
+                    fontSize: 13,
+                    color: "#8AB4C8",
+                    margin: 0,
+                    textAlign: "center",
+                    lineHeight: 1.6,
+                    maxWidth: 440,
+                  }}
+                >
+                  AI-powered intelligence with live ecosystem data.
+                  <br />
+                  Ask anything about Initia — perform staking, bridging,
+                  governance, or monitoring.
+                </p>
+
+                {/* Connected user identity */}
+                {isConnected && initiaAddress && (
+                  <p
+                    style={{
+                      fontFamily: "var(--font-jetbrains), monospace",
+                      fontSize: 12,
+                      color: username ? "#00FF88" : "#5A7A8A",
+                      margin: 0,
+                    }}
+                  >
+                    {username
+                      ? `Connected as @${username}`
+                      : `${initiaAddress.slice(0, 12)}...${initiaAddress.slice(-4)}`}
+                  </p>
+                )}
+
+                {/* Live data indicator */}
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: 8,
-                    padding: "8px 0",
+                    padding: "6px 14px",
+                    border: "1px solid rgba(0,255,136,0.1)",
+                    borderRadius: 20,
+                    background: "rgba(0,255,136,0.03)",
+                    marginTop: 4,
                   }}
                 >
-                  <Loader2
-                    style={{ width: 14, height: 14, color: "#00FF88" }}
-                    className="animate-spin"
+                  <span
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: "50%",
+                      background: "#00FF88",
+                      boxShadow: "0 0 8px #00FF88",
+                      animation: "pulse-glow-green 2s infinite",
+                    }}
                   />
                   <span
                     style={{
                       fontFamily: "var(--font-jetbrains), monospace",
                       fontSize: 12,
-                      color: "#5A7A8A",
+                      color: "#00FF88",
+                      letterSpacing: "0.08em",
                     }}
                   >
-                    Analyzing with live ecosystem data...
+                    Connected to live ecosystem feed
                   </span>
                 </div>
-              </div>
-            )}
 
-            <div ref={chatEndRef} />
-          </div>
-        )}
-      </div>
+                {/* Live Pulse Scores summary */}
+                {ecosystem?.minitias &&
+                  (() => {
+                    const scored = ecosystem.minitias
+                      .filter(
+                        (m) =>
+                          m.pulseScore && (m.metrics?.blockHeight ?? 0) > 0,
+                      )
+                      .sort(
+                        (a, b) =>
+                          (b.pulseScore?.total ?? 0) -
+                          (a.pulseScore?.total ?? 0),
+                      )
+                      .slice(0, 5);
+                    if (!scored.length) return null;
+                    return (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 16,
+                          padding: "8px 16px",
+                          border: "1px solid rgba(255,255,255,0.04)",
+                          borderRadius: 8,
+                          background: "rgba(255,255,255,0.01)",
+                          marginTop: 4,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--font-jetbrains), monospace",
+                            fontSize: 11,
+                            color: "#3A5A6A",
+                            letterSpacing: "0.1em",
+                          }}
+                        >
+                          PULSE SCORES
+                        </span>
+                        {scored.map((m) => (
+                          <div
+                            key={m.chainId}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 5,
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontFamily: "var(--font-jetbrains), monospace",
+                                fontSize: 12,
+                                color: "#5A7A8A",
+                              }}
+                            >
+                              {m.prettyName}
+                            </span>
+                            <span
+                              style={{
+                                fontFamily: "var(--font-jetbrains), monospace",
+                                fontSize: 14,
+                                fontWeight: 700,
+                                color: scoreColor(m.pulseScore?.total ?? 0),
+                              }}
+                            >
+                              {m.pulseScore?.total}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+              </div>
+
+              {/* Category grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: 12,
+                  width: "100%",
+                  maxWidth: 700,
+                }}
+              >
+                {CATEGORIES.map((cat) => (
+                  <CategoryCard
+                    key={cat.label}
+                    icon={cat.icon}
+                    label={cat.label}
+                    questions={cat.questions}
+                    onSelect={sendMessage}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Chat messages */}
+          {hasMessages && (
+            <div
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                paddingTop: 16,
+                paddingBottom: 140,
+                display: "flex",
+                flexDirection: "column",
+                gap: 24,
+              }}
+            >
+              {/* Chat header with title + new chat */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "8px 0",
+                  borderBottom: "1px solid rgba(0,255,136,0.06)",
+                  marginBottom: 8,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Sparkles
+                    style={{ width: 14, height: 14, color: "#00FF88" }}
+                  />
+                  <span
+                    style={{
+                      fontFamily: "var(--font-chakra), sans-serif",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: "#E0F0FF",
+                    }}
+                  >
+                    Ask Pulse
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "var(--font-jetbrains), monospace",
+                      fontSize: 11,
+                      color: "#3A5A6A",
+                    }}
+                  >
+                    {chat.filter((m) => m.role === "user").length} messages
+                  </span>
+                </div>
+                <button
+                  onClick={() => setChat([])}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "5px 12px",
+                    borderRadius: 4,
+                    border: "1px solid rgba(0,255,136,0.1)",
+                    background: "rgba(0,255,136,0.03)",
+                    cursor: "pointer",
+                    fontFamily: "var(--font-jetbrains), monospace",
+                    fontSize: 11,
+                    color: "#5A7A8A",
+                    transition: "all 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(0,255,136,0.25)";
+                    e.currentTarget.style.color = "#00FF88";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = "rgba(0,255,136,0.1)";
+                    e.currentTarget.style.color = "#5A7A8A";
+                  }}
+                >
+                  New chat
+                </button>
+              </div>
+
+              {chat.map((m, i) => {
+                const actions = m.actions?.length
+                  ? m.actions
+                  : m.action
+                    ? [m.action]
+                    : [];
+                return (
+                  <div key={i}>
+                    <MessageBubble msg={m} />
+                    {/* Action cards for this message */}
+                    {m.role === "assistant" &&
+                      actions.map((action, ai) => {
+                        const key = `${i}-${ai}`;
+                        return (
+                          <ActionCard
+                            key={key}
+                            action={action}
+                            actionKey={key}
+                            status={txStatus[key] ?? "idle"}
+                            hash={txHash[key]}
+                            error={txError[key]}
+                            onExecute={executeAction}
+                            onBridge={handleBridge}
+                            connected={isConnected}
+                            step={actions.length > 1 ? ai + 1 : undefined}
+                            totalSteps={
+                              actions.length > 1 ? actions.length : undefined
+                            }
+                          />
+                        );
+                      })}
+                  </div>
+                );
+              })}
+
+              {/* Legacy bridge action (for messages without structured action) */}
+              {showBridgeAction && (
+                <div style={{ display: "flex", paddingLeft: 44 }}>
+                  <button
+                    onClick={handleBridge}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "10px 18px",
+                      borderRadius: 8,
+                      background: "rgba(0,255,136,0.06)",
+                      border: "1px solid rgba(0,255,136,0.2)",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-jetbrains), monospace",
+                      fontSize: 12,
+                      color: "#00FF88",
+                      transition: "all 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "rgba(0,255,136,0.12)";
+                      e.currentTarget.style.borderColor =
+                        "rgba(0,255,136,0.35)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "rgba(0,255,136,0.06)";
+                      e.currentTarget.style.borderColor = "rgba(0,255,136,0.2)";
+                    }}
+                  >
+                    <ArrowLeftRight style={{ width: 14, height: 14 }} />
+                    Open Bridge — Transfer INIT
+                  </button>
+                </div>
+              )}
+
+              {/* Loading indicator */}
+              {loading && (
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 12,
+                    paddingLeft: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      background: "rgba(0,255,136,0.06)",
+                      border: "1px solid rgba(0,255,136,0.12)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Sparkles
+                      style={{ width: 14, height: 14, color: "#00FF88" }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 0",
+                    }}
+                  >
+                    <Loader2
+                      style={{ width: 14, height: 14, color: "#00FF88" }}
+                      className="animate-spin"
+                    />
+                    <span
+                      style={{
+                        fontFamily: "var(--font-jetbrains), monospace",
+                        fontSize: 12,
+                        color: "#5A7A8A",
+                      }}
+                    >
+                      Analyzing with live ecosystem data...
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div ref={chatEndRef} />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Input bar — fixed at bottom */}
@@ -787,7 +927,8 @@ export default function AskPulsePage() {
               setInput(e.target.value);
               // Auto-resize
               e.target.style.height = "44px";
-              e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px";
+              e.target.style.height =
+                Math.min(e.target.scrollHeight, 120) + "px";
             }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -853,23 +994,32 @@ export default function AskPulsePage() {
         </form>
         {/* Auto-sign toggle — testnet only */}
         {network === "testnet" && (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            marginTop: 10,
-          }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              marginTop: 10,
+            }}
+          >
             {(() => {
               const enabled = !!autoSign?.isEnabledByChain?.["initiation-2"];
               return (
                 <button
                   onClick={async () => {
-                    if (!isConnected) { openConnect(); return; }
+                    if (!isConnected) {
+                      openConnect();
+                      return;
+                    }
                     if (!autoSign) return;
                     const chainId = "initiation-2";
                     if (enabled) {
-                      try { await autoSign.disable(chainId); } catch { await autoSign.enable(chainId); }
+                      try {
+                        await autoSign.disable(chainId);
+                      } catch {
+                        await autoSign.enable(chainId);
+                      }
                     } else {
                       await autoSign.enable(chainId);
                     }
@@ -881,7 +1031,9 @@ export default function AskPulsePage() {
                     padding: "6px 14px",
                     borderRadius: 8,
                     border: `1px solid ${enabled ? "rgba(0,255,136,0.35)" : "rgba(138,180,200,0.2)"}`,
-                    background: enabled ? "rgba(0,255,136,0.1)" : "rgba(138,180,200,0.06)",
+                    background: enabled
+                      ? "rgba(0,255,136,0.1)"
+                      : "rgba(138,180,200,0.06)",
                     cursor: "pointer",
                     fontFamily: "var(--font-jetbrains), monospace",
                     fontSize: 12,
@@ -890,22 +1042,30 @@ export default function AskPulsePage() {
                     letterSpacing: 0.3,
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.background = enabled ? "rgba(0,255,136,0.18)" : "rgba(138,180,200,0.12)";
+                    e.currentTarget.style.background = enabled
+                      ? "rgba(0,255,136,0.18)"
+                      : "rgba(138,180,200,0.12)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.background = enabled ? "rgba(0,255,136,0.1)" : "rgba(138,180,200,0.06)";
+                    e.currentTarget.style.background = enabled
+                      ? "rgba(0,255,136,0.1)"
+                      : "rgba(138,180,200,0.06)";
                   }}
                 >
                   <Zap style={{ width: 12, height: 12 }} />
                   Auto-sign {enabled ? "ON" : "OFF"}
-                  <span style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: enabled ? "#00FF88" : "#3A5A6A",
-                    boxShadow: enabled ? "0 0 6px rgba(0,255,136,0.5)" : "none",
-                    transition: "all 0.2s",
-                  }} />
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: enabled ? "#00FF88" : "#3A5A6A",
+                      boxShadow: enabled
+                        ? "0 0 6px rgba(0,255,136,0.5)"
+                        : "none",
+                      transition: "all 0.2s",
+                    }}
+                  />
                 </button>
               );
             })()}
@@ -920,7 +1080,10 @@ export default function AskPulsePage() {
             marginTop: 8,
           }}
         >
-          Pulse AI analyzes live on-chain data from {ecosystem?.minitias?.filter(m => (m.metrics?.blockHeight ?? 0) > 0).length ?? "—"} rollups in real-time
+          Pulse AI analyzes live on-chain data from{" "}
+          {ecosystem?.minitias?.filter((m) => (m.metrics?.blockHeight ?? 0) > 0)
+            .length ?? "—"}{" "}
+          rollups in real-time
         </p>
       </div>
     </div>
@@ -935,9 +1098,11 @@ function CategoryCard({
   questions,
   onSelect,
 }: {
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement> & { style?: React.CSSProperties }>;
+  icon: React.ComponentType<
+    React.SVGProps<SVGSVGElement> & { style?: React.CSSProperties }
+  >;
   label: string;
-  questions: string[];
+  questions: (string | { display: string; value: string })[];
   onSelect: (q: string) => void;
 }) {
   return (
@@ -994,39 +1159,42 @@ function CategoryCard({
           gap: 4,
         }}
       >
-        {questions.map((q) => (
-          <button
-            key={q}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelect(q);
-            }}
-            style={{
-              textAlign: "left",
-              padding: "6px 8px",
-              borderRadius: 4,
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
-              fontFamily: "var(--font-jetbrains), monospace",
-              fontSize: 12,
-              color: "#5A7A8A",
-              lineHeight: 1.4,
-              transition: "all 0.1s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "rgba(0,255,136,0.06)";
-              e.currentTarget.style.color = "#00FF88";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-              e.currentTarget.style.color = "#5A7A8A";
-            }}
-          >
-            {/* Truncate long init1... addresses for display only */}
-            {q.replace(/(init1[a-z0-9]{6})[a-z0-9]{20,}/g, "$1...")}
-          </button>
-        ))}
+        {questions.map((q) => {
+          const display = typeof q === "string" ? q : q.display;
+          const value = typeof q === "string" ? q : q.value;
+          return (
+            <button
+              key={display}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(value);
+              }}
+              style={{
+                textAlign: "left",
+                padding: "6px 8px",
+                borderRadius: 4,
+                border: "none",
+                background: "transparent",
+                cursor: "pointer",
+                fontFamily: "var(--font-jetbrains), monospace",
+                fontSize: 12,
+                color: "#5A7A8A",
+                lineHeight: 1.4,
+                transition: "all 0.1s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(0,255,136,0.06)";
+                e.currentTarget.style.color = "#00FF88";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.color = "#5A7A8A";
+              }}
+            >
+              {display}
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -1156,7 +1324,9 @@ function MessageBubble({ msg }: { msg: ChatMsg }) {
 
 /* ─── Action Card ──────────────────────────────────────────────────────────── */
 
-const PULSE_GOV_ADDRESS = process.env.NEXT_PUBLIC_PULSE_GOV_ADDRESS ?? "0x7134FC77B9E88113c0A57602495f3146A879F820";
+const PULSE_GOV_ADDRESS =
+  process.env.NEXT_PUBLIC_PULSE_GOV_ADDRESS ??
+  "0x7134FC77B9E88113c0A57602495f3146A879F820";
 const PULSE_GOV_ABI = [
   {
     name: "vote",
@@ -1170,7 +1340,12 @@ const PULSE_GOV_ABI = [
   },
 ] as const;
 
-const ACTION_ICONS: Record<string, React.ComponentType<React.SVGProps<SVGSVGElement> & { style?: React.CSSProperties }>> = {
+const ACTION_ICONS: Record<
+  string,
+  React.ComponentType<
+    React.SVGProps<SVGSVGElement> & { style?: React.CSSProperties }
+  >
+> = {
   send: Coins,
   stake: Lock,
   unstake: Lock,
@@ -1210,23 +1385,31 @@ function ActionCard({
         style={{
           padding: "14px 18px",
           borderRadius: 10,
-          background: status === "success"
-            ? "rgba(0,255,136,0.04)"
-            : status === "error"
-            ? "rgba(255,60,60,0.04)"
-            : "rgba(0,255,136,0.02)",
+          background:
+            status === "success"
+              ? "rgba(0,255,136,0.04)"
+              : status === "error"
+                ? "rgba(255,60,60,0.04)"
+                : "rgba(0,255,136,0.02)",
           border: `1px solid ${
             status === "success"
               ? "rgba(0,255,136,0.25)"
               : status === "error"
-              ? "rgba(255,60,60,0.2)"
-              : "rgba(0,255,136,0.12)"
+                ? "rgba(255,60,60,0.2)"
+                : "rgba(0,255,136,0.12)"
           }`,
           maxWidth: 420,
         }}
       >
         {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 8,
+          }}
+        >
           <div
             style={{
               width: 24,
@@ -1239,7 +1422,14 @@ function ActionCard({
             }}
           >
             {step && totalSteps && totalSteps > 1 ? (
-              <span style={{ fontFamily: "var(--font-jetbrains), monospace", fontSize: 10, fontWeight: 700, color: "#00FF88" }}>
+              <span
+                style={{
+                  fontFamily: "var(--font-jetbrains), monospace",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#00FF88",
+                }}
+              >
                 {step}/{totalSteps}
               </span>
             ) : (
@@ -1264,7 +1454,10 @@ function ActionCard({
                 color: action.type === "vote" ? "#FFB800" : "#3A5A6A",
                 padding: "2px 6px",
                 borderRadius: 4,
-                background: action.type === "vote" ? "rgba(255,184,0,0.06)" : "rgba(0,255,136,0.04)",
+                background:
+                  action.type === "vote"
+                    ? "rgba(255,184,0,0.06)"
+                    : "rgba(0,255,136,0.04)",
                 border: `1px solid ${action.type === "vote" ? "rgba(255,184,0,0.15)" : "rgba(0,255,136,0.08)"}`,
               }}
             >
@@ -1317,7 +1510,14 @@ function ActionCard({
           </div>
         ) : status === "error" ? (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 6,
+              }}
+            >
               <XCircle style={{ width: 14, height: 14, color: "#FF3C3C" }} />
               <span
                 style={{
@@ -1345,7 +1545,11 @@ function ActionCard({
           </div>
         ) : (
           <button
-            onClick={() => action.type === "bridge" ? onBridge() : onExecute(action, actionKey)}
+            onClick={() =>
+              action.type === "bridge"
+                ? onBridge()
+                : onExecute(action, actionKey)
+            }
             disabled={isExecuting}
             style={{
               display: "flex",
@@ -1353,7 +1557,9 @@ function ActionCard({
               gap: 8,
               padding: "8px 16px",
               borderRadius: 6,
-              background: isExecuting ? "rgba(0,255,136,0.04)" : "rgba(0,255,136,0.1)",
+              background: isExecuting
+                ? "rgba(0,255,136,0.04)"
+                : "rgba(0,255,136,0.1)",
               border: "1px solid rgba(0,255,136,0.2)",
               cursor: isExecuting ? "wait" : "pointer",
               fontFamily: "var(--font-jetbrains), monospace",
@@ -1377,8 +1583,13 @@ function ActionCard({
           >
             {isExecuting ? (
               <>
-                <Loader2 style={{ width: 13, height: 13 }} className="animate-spin" />
-                {status === "signing" ? "Preparing transaction..." : "Broadcasting..."}
+                <Loader2
+                  style={{ width: 13, height: 13 }}
+                  className="animate-spin"
+                />
+                {status === "signing"
+                  ? "Preparing transaction..."
+                  : "Broadcasting..."}
               </>
             ) : !connected ? (
               <>

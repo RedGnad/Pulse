@@ -109,9 +109,9 @@ export async function POST(req: NextRequest) {
             details.join("\n\n") +
             `\n\nIMPORTANT: Explain each proposal clearly so the user can make an informed decision. After your analysis, mention they can vote by saying "vote yes/no/abstain on proposal #ID". Votes are executed via PulseGov.sol on the Pulse EVM rollup using the ICosmos precompile.\n`;
         } else {
-          govContext = `\n\n[GOVERNANCE] No proposals currently in voting period on ${network === "mainnet" ? "mainnet" : "testnet"}.\n`;
+          govContext = `\n\n[GOVERNANCE] No proposals currently in voting period on ${network === "mainnet" ? "mainnet" : "testnet"}. IMPORTANT: Tell the user that when proposals open, you can analyze and explain each proposal (implications, trade-offs, who it impacts) so they can make an informed decision before voting. They can ask "explain proposal #ID" for a brief, then "vote yes/no/abstain on proposal #ID" to cast on-chain via PulseGov (ICosmos precompile on the Pulse EVM rollup).\n`;
         }
-      } catch { /* non-critical */ }
+      } catch (govErr) { console.error("[GOV] Failed to fetch proposals:", govErr instanceof Error ? govErr.message : govErr); }
     }
 
     const isMainnet = network === "mainnet";
