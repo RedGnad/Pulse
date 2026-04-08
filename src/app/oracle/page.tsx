@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { SnapshotCountdown } from "@/components/snapshot-countdown";
 
-const ORACLE_ADDR = "0xB7C25af401137597C896685Fc195e0143c54de7A";
+const ORACLE_ADDR = process.env.NEXT_PUBLIC_PULSE_ORACLE_ADDRESS ?? "0xc09F200B0d98ca2b21761aFA191FEdb55a9AA4B4";
 const CHAIN_ID = "initia-pulse-1";
 const EVM_ID = "2150269405855764";
 

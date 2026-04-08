@@ -1156,7 +1156,7 @@ function MessageBubble({ msg }: { msg: ChatMsg }) {
 
 /* ─── Action Card ──────────────────────────────────────────────────────────── */
 
-const PULSE_GOV_ADDRESS = process.env.NEXT_PUBLIC_PULSE_GOV_ADDRESS ?? "0x0000000000000000000000000000000000000000";
+const PULSE_GOV_ADDRESS = process.env.NEXT_PUBLIC_PULSE_GOV_ADDRESS ?? "0x7134FC77B9E88113c0A57602495f3146A879F820";
 const PULSE_GOV_ABI = [
   {
     name: "vote",

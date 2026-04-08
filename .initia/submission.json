@@ -3,7 +3,7 @@
   "repo_url": "https://github.com/RedGnad/Pulse",
   "commit_sha": "de2bbec0d0c611893d32c0f786324efeec54ee3e",
   "rollup_chain_id": "initia-pulse-1",
-  "deployed_address": "0xc09F200B0d98ca2b21761aFA191FEdb55a9AA4B4",
+  "deployed_address": "0xB7C25af401137597C896685Fc195e0143c54de7A",
   "vm": "evm",
   "native_feature": "interwoven-bridge, auto-signing, l1-governance, init-usernames",
   "core_logic_path": "contracts/PulseOracle.sol",
