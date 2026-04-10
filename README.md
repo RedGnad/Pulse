@@ -21,7 +21,7 @@ The contract exposes DeFi-composable primitives: `isHealthy(minHealth, minStreak
     
   - **.init usernames**: Supports `.init` username resolution, users can say "send 5 INIT to @alice" or "send 5 INIT to alice.init" and the backend resolves the username to an on-chain address before execution.
   
-  - **L1 Governance from EVM Rollup**: PulseGov.sol uses the ICosmos precompile (`0x...f1`) to vote on Initia L1 governance proposals directly from the Pulse EVM rollup.
+  - **L1 Governance from EVM Rollup**: PulseGov.sol uses the ICosmos precompile to vote on Initia L1 governance proposals directly from the Pulse EVM rollup.
 Integrated into Ask Pulse, users can say "vote yes on proposal 42" and the AI generates an executable action card. This demonstrates the Interwoven architecture: Cosmos-native governance actions triggered from an EVM execution environment.
 
 ### How to Run Locally
