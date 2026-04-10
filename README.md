@@ -74,7 +74,7 @@ Integrated into Ask Pulse, users can say "vote yes on proposal 42" and the AI ge
 
 ### What Pulse does not prove
 - **Data provenance**: `dataHash` proves data wasn't modified after commit, it does not cryptographically prove which source produced it. All sources are public Initia APIs, independently verifiable. 
-- **AI correctness**: The brief is AI-generated analysis, not financial advice. Always DYOR before acting on recommendation.
+- **AI advisor correctness**: The brief is AI-generated analysis, not financial advice. Always DYOR before acting on recommendation.
 
 ### Current trust assumptions
 - Single backend signer writes snapshots (writer key)
