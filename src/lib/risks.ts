@@ -56,14 +56,63 @@ export function deriveRisks(eco: EcosystemOverview): Risk[] {
 
   risks.push(...deriveIbcRisks(eco.ibcChannels, minitias));
 
+  const coalesced = coalesceCorrelated(risks);
+
   // Sort by severity then by ascending score (lowest = worst)
-  risks.sort((a, b) => {
+  coalesced.sort((a, b) => {
     const s = SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity];
     if (s !== 0) return s;
     return (a.score ?? 100) - (b.score ?? 100);
   });
 
-  return risks;
+  return coalesced;
+}
+
+/**
+ * When ≥3 rollups share the same risk kind at the same time, it's almost
+ * always a correlated failure (indexer glitch, network-wide slow REST,
+ * registry drift) rather than independent incidents. Collapse them into a
+ * single aggregate risk so the UI doesn't look broken.
+ */
+function coalesceCorrelated(risks: Risk[]): Risk[] {
+  const byKind = new Map<RiskKind, Risk[]>();
+  for (const r of risks) {
+    const arr = byKind.get(r.kind) ?? [];
+    arr.push(r);
+    byKind.set(r.kind, arr);
+  }
+
+  const out: Risk[] = [];
+  for (const [kind, group] of byKind) {
+    if (group.length >= 3 && kind !== "rollup_score") {
+      const targets = group.map(g => g.target).join(", ");
+      const worst = group.reduce((a, b) => SEVERITY_RANK[b.severity] > SEVERITY_RANK[a.severity] ? b : a);
+      const affected = Array.from(new Set(group.flatMap(g => g.affectedActions)));
+      out.push({
+        id: `coalesced-${kind}`,
+        kind,
+        severity: worst.severity === "critical" ? "elevated" : worst.severity, // downgrade: correlated ≠ catastrophic
+        target: `${group.length} rollups`,
+        headline: labelForCoalescedKind(kind, group.length),
+        detail: `Affected: ${targets}. This is most likely a correlated data-layer issue (indexer lag, REST node cache) rather than ${group.length} independent failures.`,
+        recommendation: "Treat as an advisory. Verify with a direct RPC before blocking any action.",
+        affectedActions: affected as Risk["affectedActions"],
+      });
+    } else {
+      out.push(...group);
+    }
+  }
+  return out;
+}
+
+function labelForCoalescedKind(kind: RiskKind, n: number): string {
+  switch (kind) {
+    case "rollup_stale":     return `${n} rollups reporting stale REST state`;
+    case "rollup_validators":return `${n} rollups running single-sequencer setups`;
+    case "rollup_no_bridge": return `${n} rollups without OPinit bridges`;
+    case "ibc_channel":      return `${n} rollups with no transfer channels`;
+    default:                 return `${n} rollups affected`;
+  }
 }
 
 function deriveRollupRisks(
@@ -122,20 +171,49 @@ function deriveRollupRisks(
     });
   }
 
-  // Stale blocks (block age > 5 min)
+  // Stale blocks — only trust if we can sanity-check the signal.
+  // A single REST node lagging is not the same as a halted chain: if the
+  // indexer reports a fresh avgBlockTime and the rollup has a real height,
+  // the chain is clearly producing and we downgrade (or skip) the signal.
   if (metrics.latestBlockTime) {
-    const ageSec = (Date.now() - new Date(metrics.latestBlockTime).getTime()) / 1000;
-    if (ageSec > 300) {
+    const parsed = new Date(metrics.latestBlockTime).getTime();
+    const ageSec = Number.isFinite(parsed) ? (Date.now() - parsed) / 1000 : NaN;
+    const chainClearlyLive =
+      metrics.blockHeight > 0 &&
+      typeof metrics.avgBlockTime === "number" &&
+      metrics.avgBlockTime > 0 &&
+      metrics.avgBlockTime < 30;
+
+    // Clock-safe: ignore negative / NaN / absurd ages (> 30 days)
+    const plausible = Number.isFinite(ageSec) && ageSec > -60 && ageSec < 86400 * 30;
+
+    if (plausible && ageSec > 300) {
+      // If indexer says the chain produces ~every avgBlockTime seconds,
+      // the REST /blocks/latest lag is almost certainly node-side, not chain-side.
+      // Cap severity at "watch" in that case — it's worth showing but it's not
+      // a demo-killing critical.
+      const severity: RiskSeverity = chainClearlyLive
+        ? "watch"
+        : ageSec > 1800
+        ? "critical"
+        : "elevated";
+
       out.push({
         id: `rollup-stale-${m.chainId}`,
         kind: "rollup_stale",
-        severity: ageSec > 1800 ? "critical" : "elevated",
+        severity,
         target: m.prettyName ?? m.name,
         targetChainId: m.chainId,
-        headline: `${m.prettyName ?? m.name} last block ${formatAge(ageSec)} ago`,
-        detail: `The chain has not produced a block for ${formatAge(ageSec)}. Bridges out may time out, stakes won't earn, votes can't be broadcast.`,
-        recommendation: "Wait for block production to resume before submitting any transaction.",
-        affectedActions: ["bridge", "stake", "send", "vote"],
+        headline: chainClearlyLive
+          ? `${m.prettyName ?? m.name} REST node lag (${formatAge(ageSec)})`
+          : `${m.prettyName ?? m.name} last block ${formatAge(ageSec)} ago`,
+        detail: chainClearlyLive
+          ? `The chain is still producing blocks (avg ${metrics.avgBlockTime?.toFixed(1)}s) but its public REST endpoint is lagging. Reads may be stale; writes are likely fine.`
+          : `The chain has not produced a block for ${formatAge(ageSec)}. Bridges out may time out, stakes won't earn, votes can't be broadcast.`,
+        recommendation: chainClearlyLive
+          ? "Prefer a backup RPC when querying state; transactions should still broadcast."
+          : "Wait for block production to resume before submitting any transaction.",
+        affectedActions: chainClearlyLive ? ["bridge"] : ["bridge", "stake", "send", "vote"],
       });
     }
   }
