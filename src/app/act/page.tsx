@@ -104,45 +104,98 @@ function ActPageInner() {
         </p>
       </section>
 
-      {/* Step 1 — pick action */}
-      <Step number="1" title="Pick an action" active={!action} done={!!action}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
-          {ACTIONS.map(a => {
-            const isActive = action === a.id;
-            return (
-              <button
-                key={a.id}
-                onClick={() => setAction(a.id)}
-                style={{
-                  padding: "14px 12px",
-                  borderRadius: 8,
-                  border: isActive ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(0,255,136,0.08)",
-                  background: isActive ? "rgba(0,255,136,0.06)" : "rgba(10,18,24,0.4)",
-                  cursor: "pointer",
-                  display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 8,
-                  transition: "all 0.15s",
-                }}
-              >
-                <a.Icon style={{ width: 16, height: 16, color: isActive ? "#00FF88" : "#8AB4C8" }} />
-                <span style={{
-                  fontFamily: SANS, fontSize: 13, fontWeight: 700,
-                  color: isActive ? "#E0F0FF" : "#8AB4C8",
-                }}>
-                  {a.label}
-                </span>
-                <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", lineHeight: 1.4, textAlign: "left" }}>
-                  {a.desc}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </Step>
-
-      {/* Step 2 — pick target */}
-      {action && (
-        <Step number="2" title="Pick a target rollup" active={!target} done={!!target}>
+      {/* Combined picker — action + target on one screen */}
+      <section style={{
+        display: "grid", gridTemplateColumns: "260px 1fr", gap: 16,
+        marginBottom: 24,
+      }}>
+        {/* Left: action column */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{
+              width: 20, height: 20, borderRadius: "50%",
+              border: "1px solid rgba(0,255,136,0.4)", background: "rgba(0,255,136,0.08)",
+              color: "#00FF88", fontFamily: MONO, fontSize: 10, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              1
+            </span>
+            <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
+              Action
+            </span>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {ACTIONS.map(a => {
+              const isActive = action === a.id;
+              return (
+                <button
+                  key={a.id}
+                  onClick={() => setAction(a.id)}
+                  style={{
+                    padding: "11px 13px",
+                    borderRadius: 7,
+                    border: isActive ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(255,255,255,0.05)",
+                    background: isActive ? "rgba(0,255,136,0.06)" : "rgba(10,18,24,0.5)",
+                    cursor: "pointer",
+                    display: "flex", alignItems: "center", gap: 10,
+                    textAlign: "left",
+                    transition: "all 0.15s",
+                  }}
+                >
+                  <a.Icon style={{ width: 14, height: 14, color: isActive ? "#00FF88" : "#8AB4C8", flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: SANS, fontSize: 12, fontWeight: 700,
+                      color: isActive ? "#E0F0FF" : "#8AB4C8",
+                    }}>
+                      {a.label}
+                    </div>
+                    <div style={{ fontFamily: MONO, fontSize: 9, color: "#5A7A8A", lineHeight: 1.4 }}>
+                      {a.desc}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right: target column */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span style={{
+              width: 20, height: 20, borderRadius: "50%",
+              border: action ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(90,122,138,0.3)",
+              background: action ? "rgba(0,255,136,0.08)" : "transparent",
+              color: action ? "#00FF88" : "#5A7A8A",
+              fontFamily: MONO, fontSize: 10, fontWeight: 700,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              2
+            </span>
+            <span style={{
+              fontFamily: SANS, fontSize: 13, fontWeight: 700,
+              color: action ? "#E0F0FF" : "#5A7A8A",
+            }}>
+              Target rollup
+            </span>
+            {!action && (
+              <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", marginLeft: "auto" }}>
+                pick an action first
+              </span>
+            )}
+            {action && (
+              <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", marginLeft: "auto" }}>
+                sorted by pulse score
+              </span>
+            )}
+          </div>
+          <div style={{
+            display: "flex", flexDirection: "column", gap: 5,
+            opacity: action ? 1 : 0.4,
+            pointerEvents: action ? "auto" : "none",
+            transition: "opacity 0.2s",
+          }}>
             {scored.map(({ minitia: m, score }) => {
               const isActive = target === m.chainId;
               const color = scoreColor(score);
@@ -152,12 +205,12 @@ function ActPageInner() {
                   key={m.chainId}
                   onClick={() => setTarget(m.chainId)}
                   style={{
-                    padding: "12px 14px",
+                    padding: "11px 13px",
                     borderRadius: 6,
                     border: isActive ? `1px solid ${color}55` : "1px solid rgba(255,255,255,0.04)",
                     background: isActive ? `${color}10` : "rgba(10,18,24,0.5)",
                     cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 12,
+                    display: "flex", alignItems: "center", gap: 10,
                     textAlign: "left",
                   }}
                 >
@@ -165,7 +218,7 @@ function ActPageInner() {
                     width: 8, height: 8, borderRadius: "50%", background: color,
                     boxShadow: `0 0 8px ${color}`, flexShrink: 0,
                   }} />
-                  <span style={{ fontFamily: SANS, fontSize: 14, fontWeight: 600, color: "#E0F0FF", flex: 1 }}>
+                  <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: "#E0F0FF", flex: 1 }}>
                     {m.prettyName ?? m.name}
                   </span>
                   <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A" }}>
@@ -183,8 +236,8 @@ function ActPageInner() {
               );
             })}
           </div>
-        </Step>
-      )}
+        </div>
+      </section>
 
       {/* Target in URL that doesn't match any known rollup */}
       {action && target && !targetMinitia && (
@@ -229,30 +282,6 @@ function ActPageInner() {
         />
       )}
     </div>
-  );
-}
-
-function Step({ number, title, active, done, children }: {
-  number: string; title: string; active: boolean; done: boolean; children: React.ReactNode;
-}) {
-  const color = active ? "#00FF88" : done ? "#00D4FF" : "#5A7A8A";
-  return (
-    <section style={{ marginBottom: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <span style={{
-          width: 22, height: 22, borderRadius: "50%",
-          border: `1px solid ${color}55`, background: `${color}12`,
-          color, fontFamily: MONO, fontSize: 11, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {number}
-        </span>
-        <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 700, color: "#E0F0FF" }}>
-          {title}
-        </span>
-      </div>
-      <div>{children}</div>
-    </section>
   );
 }
 
