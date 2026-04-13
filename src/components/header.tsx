@@ -178,13 +178,13 @@ export function Header() {
         {/* Nav + Right */}
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <span className="nav-links" style={{ display: "contents" }}>
-            <NavLink href="/" active={pathname === "/"} step="01">Monitor</NavLink>
+            <NavLink href="/" active={pathname === "/"} step="01">Signal</NavLink>
+            <NavLink href="/act" active={pathname.startsWith("/act")} step="02">Act</NavLink>
+            <NavLink href="/gate" active={pathname.startsWith("/gate")} step="03">Gate</NavLink>
             <NavLink href="/ask" active={pathname === "/ask"} highlight glow step="">
               <Sparkles style={{ width: 12, height: 12 }} />
               Ask Pulse
             </NavLink>
-            <NavLink href="/oracle" active={pathname === "/oracle"} step="02">Verify</NavLink>
-            <NavLink href="/advisor" active={pathname.startsWith("/advisor")} step="03">Act</NavLink>
           </span>
 
           <div style={{ width: 1, height: 18, background: "rgba(0,255,136,0.08)", margin: "0 8px" }} />

@@ -26,6 +26,7 @@ import { useUsername } from "@/hooks/use-username";
 import { useNetwork } from "@/contexts/network-context";
 import { scoreColor } from "@/lib/pulse-score";
 import type { ActionIntent } from "@/lib/action-parser";
+import { GateBadge } from "@/components/gate-badge";
 
 interface ChatMsg {
   role: "user" | "assistant";
@@ -445,6 +446,10 @@ export default function AskPulsePage() {
             zIndex: 1,
           }}
         >
+          {/* Live Pulse gate — same signal any consuming contract sees */}
+          <div style={{ display: "flex", justifyContent: "center", paddingTop: 16 }}>
+            <GateBadge />
+          </div>
           {/* Empty state — hero + categories */}
           {!hasMessages && (
             <div
