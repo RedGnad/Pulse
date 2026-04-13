@@ -186,6 +186,38 @@ function ActPageInner() {
         </Step>
       )}
 
+      {/* Target in URL that doesn't match any known rollup */}
+      {action && target && !targetMinitia && (
+        <section style={{
+          padding: 16, marginBottom: 24,
+          borderRadius: 8,
+          border: "1px solid rgba(255,184,0,0.25)",
+          background: "rgba(255,184,0,0.05)",
+          display: "flex", alignItems: "flex-start", gap: 12,
+        }}>
+          <AlertCircle style={{ width: 18, height: 18, color: "#FFB800", flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF", marginBottom: 3 }}>
+              Rollup <code style={{ color: "#FFB800" }}>{target}</code> is not in the Initia registry
+            </div>
+            <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.6 }}>
+              Pulse couldn&apos;t find this chain in the current snapshot. Pick a target from the list above, or reset the flow.
+            </div>
+          </div>
+          <button
+            onClick={() => setTarget(null)}
+            style={{
+              fontFamily: MONO, fontSize: 11, color: "#FFB800",
+              background: "rgba(255,184,0,0.08)",
+              border: "1px solid rgba(255,184,0,0.25)",
+              borderRadius: 4, padding: "5px 10px", cursor: "pointer",
+            }}
+          >
+            clear
+          </button>
+        </section>
+      )}
+
       {/* Step 3 — verdict */}
       {action && target && targetMinitia && targetScored && (
         <Verdict
