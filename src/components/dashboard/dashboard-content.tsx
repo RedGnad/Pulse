@@ -66,7 +66,7 @@ export function DashboardContent() {
             fontFamily: SANS, fontSize: 36, fontWeight: 800,
             color: "#E0F0FF", margin: 0, letterSpacing: "-0.03em", lineHeight: 1.1,
           }}>
-            The composable risk layer{" "}
+            Block unsafe actions before they hit{" "}
             <span
               className="pulse-gradient-text"
               style={{
@@ -74,15 +74,15 @@ export function DashboardContent() {
                   ? "linear-gradient(90deg, #FFB800, #00D4FF, #FFB800, #00FF88, #FFB800)"
                   : "linear-gradient(90deg, #00FF88, #00D4FF, #A78BFA, #00FF88)",
               }}
-            >for Initia</span>
+            >Initia rollups.</span>
           </h1>
           <p style={{
             fontFamily: MONO, fontSize: 13, color: "#8AB4C8",
             margin: "10px 0 0", lineHeight: 1.6, maxWidth: 680,
           }}>
-            Pulse reads every rollup, route, and IBC channel in the Initia ecosystem,
-            scores their risk live, writes the signal on-chain, and lets any contract
-            or user gate actions on it.
+            Pulse scores every rollup, route, and IBC channel live and writes the
+            signal on-chain. <span style={{ color: "#E0F0FF" }}>30 lines of Solidity</span> let any contract gate
+            deposits, bridges, or votes when the target is degraded.
           </p>
         </div>
 
