@@ -1,9 +1,50 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ShieldAlert, AlertTriangle, AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { Risk, deriveRisks } from "@/lib/risks";
 import { EcosystemOverview } from "@/lib/types";
+
+function useLiveAge(timestamp: string | undefined): string {
+  const [age, setAge] = useState<string>("—");
+  useEffect(() => {
+    if (!timestamp) return;
+    const tick = () => {
+      const ms = Date.now() - new Date(timestamp).getTime();
+      if (!Number.isFinite(ms) || ms < 0) { setAge("just now"); return; }
+      const s = Math.floor(ms / 1000);
+      if (s < 60)   setAge(`${s}s ago`);
+      else if (s < 3600) setAge(`${Math.floor(s / 60)}m ${s % 60}s ago`);
+      else          setAge(`${Math.floor(s / 3600)}h ago`);
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [timestamp]);
+  return age;
+}
+
+function LiveBadge({ lastUpdated }: { lastUpdated: string | undefined }) {
+  const age = useLiveAge(lastUpdated);
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      fontFamily: "var(--font-jetbrains), monospace", fontSize: 10,
+      padding: "3px 9px", borderRadius: 3,
+      background: "rgba(0,255,136,0.05)",
+      border: "1px solid rgba(0,255,136,0.15)",
+      color: "#00FF88", letterSpacing: "0.08em",
+    }}>
+      <span style={{
+        display: "block", width: 6, height: 6, borderRadius: "50%",
+        background: "#00FF88", boxShadow: "0 0 6px #00FF88",
+        animation: "pulse-glow-green 2s infinite",
+      }} />
+      LIVE · {age}
+    </span>
+  );
+}
 
 const MONO = "var(--font-jetbrains), monospace";
 const SANS = "var(--font-chakra), sans-serif";
@@ -37,6 +78,7 @@ export function CurrentRisks({ eco, limit = 4 }: { eco: EcosystemOverview; limit
             Every reachable rollup is producing blocks and scoring above the caution threshold. Safe to bridge, stake, and act.
           </div>
         </div>
+        <LiveBadge lastUpdated={eco.lastUpdated} />
       </section>
     );
   }
@@ -61,6 +103,7 @@ export function CurrentRisks({ eco, limit = 4 }: { eco: EcosystemOverview; limit
         }}>
           {totalCritical} critical · {totalElevated} elevated · {all.length - totalCritical - totalElevated} watch
         </span>
+        <LiveBadge lastUpdated={eco.lastUpdated} />
         <div style={{ flex: 1, height: 1, background: "rgba(255,184,0,0.06)" }} />
         <Link href="/act" style={{
           fontFamily: MONO, fontSize: 11, color: "#00FF88",

@@ -22,6 +22,9 @@ import type { EcosystemOverview } from "./types";
 import type { NetworkMode } from "./initia-client";
 
 const FRESH_MS = 20_000;
+// Above this age, we don't trust stale anymore — block the caller and fetch.
+// This keeps the "LIVE · Xs ago" badge honest even after a long idle.
+const STALE_MAX_MS = 120_000;
 
 interface Entry {
   data: EcosystemOverview;
@@ -39,8 +42,11 @@ async function loadSeedFromDisk(network: NetworkMode): Promise<Entry | null> {
   try {
     const raw = await fs.readFile(seedPath(network), "utf8");
     const data = JSON.parse(raw) as EcosystemOverview;
-    // Mark seed as stale so the first request triggers a background refresh
-    return { data, freshAt: 0 };
+    // Use the embedded lastUpdated so stale-ceiling logic sees the real age.
+    // If missing or unparseable, fall back to "very old" so a fresh fetch runs.
+    const t = data.lastUpdated ? new Date(data.lastUpdated).getTime() : 0;
+    const freshAt = Number.isFinite(t) && t > 0 ? t : 0;
+    return { data, freshAt };
   } catch {
     return null;
   }
@@ -79,8 +85,9 @@ export async function getEcosystemCached(
     return { data: entry.data, source: "fresh" };
   }
 
-  // Stale hit — return immediately AND trigger background refresh
-  if (entry) {
+  // Stale hit within the tolerated window — return immediately and trigger
+  // a background refresh. The next request will be fresh.
+  if (entry && now - entry.freshAt < STALE_MAX_MS) {
     refreshInBackground(network, builder);
     return { data: entry.data, source: "stale" };
   }
