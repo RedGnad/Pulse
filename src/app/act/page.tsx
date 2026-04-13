@@ -33,10 +33,23 @@ export default function ActPage() {
   );
 }
 
+function useIsNarrow(bp = 900): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${bp}px)`);
+    const apply = () => setNarrow(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [bp]);
+  return narrow;
+}
+
 function ActPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const { data: eco, isLoading } = useEcosystem();
+  const isNarrow = useIsNarrow(900);
 
   const [action, setAction] = useState<Action | null>((sp.get("action") as Action) ?? null);
   const [target, setTarget] = useState<string | null>(sp.get("target"));
@@ -106,7 +119,9 @@ function ActPageInner() {
 
       {/* Combined picker — action + target on one screen */}
       <section style={{
-        display: "grid", gridTemplateColumns: "260px 1fr", gap: 16,
+        display: "grid",
+        gridTemplateColumns: isNarrow ? "1fr" : "260px 1fr",
+        gap: 16,
         marginBottom: 24,
       }}>
         {/* Left: action column */}
@@ -124,7 +139,11 @@ function ActPageInner() {
               Action
             </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isNarrow ? "repeat(4, 1fr)" : "1fr",
+            gap: 6,
+          }}>
             {ACTIONS.map(a => {
               const isActive = action === a.id;
               return (
@@ -132,13 +151,16 @@ function ActPageInner() {
                   key={a.id}
                   onClick={() => setAction(a.id)}
                   style={{
-                    padding: "11px 13px",
+                    padding: isNarrow ? "10px 6px" : "11px 13px",
                     borderRadius: 7,
                     border: isActive ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(255,255,255,0.05)",
                     background: isActive ? "rgba(0,255,136,0.06)" : "rgba(10,18,24,0.5)",
                     cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 10,
-                    textAlign: "left",
+                    display: "flex",
+                    flexDirection: isNarrow ? "column" : "row",
+                    alignItems: isNarrow ? "center" : "center",
+                    gap: isNarrow ? 4 : 10,
+                    textAlign: isNarrow ? "center" : "left",
                     transition: "all 0.15s",
                   }}
                 >
@@ -150,9 +172,11 @@ function ActPageInner() {
                     }}>
                       {a.label}
                     </div>
-                    <div style={{ fontFamily: MONO, fontSize: 9, color: "#5A7A8A", lineHeight: 1.4 }}>
-                      {a.desc}
-                    </div>
+                    {!isNarrow && (
+                      <div style={{ fontFamily: MONO, fontSize: 9, color: "#5A7A8A", lineHeight: 1.4 }}>
+                        {a.desc}
+                      </div>
+                    )}
                   </div>
                 </button>
               );
