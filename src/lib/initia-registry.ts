@@ -44,8 +44,10 @@ const TESTNET_MINITIAS: { folder: string; prettyName: string }[] = [
 ];
 
 // Mainnet minitias — slugs confirmed live in initia-registry.
-// blackwing / noon / tucana / milkyway (slug) are 404s; MilkyWay is
-// published under the `moo` folder with pretty_name "MilkyWay".
+// Dead/hidden in registry and explicitly excluded:
+//   blackwing / noon / tucana / milkyway → 404 (never published)
+//   moo (MilkyWay)                       → chain.json 404 and profile
+//                                          has status:"hidden" (Initia hides it)
 const MAINNET_MINITIAS: { folder: string; prettyName: string }[] = [
   { folder: "cabal", prettyName: "Cabal" },
   { folder: "civitia", prettyName: "Civitia" },
@@ -53,7 +55,6 @@ const MAINNET_MINITIAS: { folder: string; prettyName: string }[] = [
   { folder: "embr", prettyName: "Embr.fun" },
   { folder: "inertia", prettyName: "Inertia" },
   { folder: "intergaze", prettyName: "Intergaze" },
-  { folder: "moo", prettyName: "MilkyWay" },
   { folder: "rave", prettyName: "Rave" },
   { folder: "yominet", prettyName: "Yominet" },
 ];

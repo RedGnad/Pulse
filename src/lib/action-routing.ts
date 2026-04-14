@@ -124,7 +124,7 @@ const VERB_VOCAB: Record<string, string[]> = {
   vault:     ["vault", "one-click", "auto-compound", "delta neutral", "dn"],
   yield:     ["yield", "farm", "farming", "boost", "boosted"],
   meme:      ["meme", "memecoin", "launchpad"],
-  play:      ["play", "game", "earn"],
+  play:      ["play", "game", "gameplay"],
 };
 
 const ASSET_VOCAB = [
