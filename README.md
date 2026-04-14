@@ -1,6 +1,6 @@
 # Initia Pulse
 
-**An action router for Initia's specialized appchains.** Tell Pulse what you want to do in plain English — "borrow USDC", "trade ETH perps with leverage", "mint NFTs" — and it picks the minitia whose on-chain profile actually supports the action, explains why, and blocks the route if live risk signals say it's unsafe.
+**An action router for Initia's specialized appchains.** Tell Pulse what you want to do in plain English — *borrow USDC*, *trade ETH perps with leverage*, *mint NFTs* — and it routes you to the minitia whose on-chain profile actually supports the action, with a full reasoning trail. Live risk signals sit on top as a guardrail, so an unhealthy rollup quietly stops being a recommendation.
 
 ## Initia Hackathon Submission
 
@@ -10,13 +10,15 @@
 
 Initia hosts a growing set of specialized appchains (minitias) — one for perps, one for lending, one for NFTs, one for liquid staking. The user-facing question is no longer *"what is Initia?"*, it's **"which minitia should I use for this specific action, and is it safe right now?"**. Pulse is the routing layer that answers that question.
 
-Pulse reads the authoritative `initia-registry` profiles (category, description, `vipActions`) for every live mainnet minitia, scores each candidate against a parsed user intent, blends that with a live-health score, and routes the user to the best match with a full reasoning trail. The same live signal powers a composable on-chain oracle and a reference Solidity gate contract — so any rollup can gate its own operations on the same data the router just used.
+Pulse reads the authoritative `initia-registry` profiles (category, description, `vipActions`) for every live mainnet minitia, scores each candidate against a parsed user intent, blends that with a live-health score, and routes the user to the best match with a full reasoning trail.
 
-The app is organized as three layers:
+**Pulse is not a bridge router.** Initia already routes *assets* between rollups via the Interwoven Bridge. Pulse operates at the layer above: given an *intent* like "borrow USDC" or "mint NFTs", it picks the destination appchain that actually supports that intent, and the Interwoven Bridge is one execution path among others.
 
-- **`/` — Act (the router)**. Intent-first landing. Type a query, see the winning minitia with pass/fail reasoning facts (`profile action: borrow`, `supports USDC`, `supports leverage`), Pulse Score axes, and a route link. Five canonical demo queries are one click away.
-- **`/proof` — Proof layer**. A tab shell over the three pieces of evidence the router relies on: the `PulseOracle` on-chain snapshot, the `PulseGate` reference contract, and the live IBC topology graph.
-- **`/ask` — Ask Pulse**. A natural-language action layer that executes transactions on L1 (bridge, send, stake, vote) via InterwovenKit with auto-signing.
+The app is organized as three layers that follow the flow **intent → decision → proof → execution**:
+
+- **`/` — Act (the router)**. Intent-first landing. Type a query, see the winning minitia with pass/fail reasoning facts (`profile action: borrow`, `supports USDC`, `supports leverage`), the Pulse Score axes, and a deep-link into the execution layer. Five canonical demo queries are one click away.
+- **`/proof` — Proof layer**. Supporting evidence for the decision the router just made: the `PulseOracle` on-chain snapshot, the `PulseGate` reference contract, and the live IBC topology graph.
+- **`/ask` — Ask Pulse (execution)**. Natural-language action layer, deep-linked from every Act verdict card. Executes transactions on L1 (bridge, send, stake, vote) via InterwovenKit auto-signing. It is reachable as a standalone page for power users, but the canonical flow is *Act → Execute → Ask Pulse* with a verdict-aware prompt already in flight.
 
 ### Implementation Detail
 
@@ -24,21 +26,13 @@ The app is organized as three layers:
 
 - **Deterministic Pulse Score (`src/lib/pulse-score.ts`)**. Per-minitia score on five axes: Activity (25%), Settlement / L1 anchoring (20%), Bridge / IBC connectivity (20%), Growth (15%), Uptime (15%). Pure function of observable state, not an LLM opinion. Covered by vitest.
 
-- **`PulseOracle.sol`**. A composable Solidity contract deployed on a dedicated MiniEVM rollup (`initia-pulse-1`). Stores a circular history of ecosystem snapshots (block height, active minitias, IBC channels, validators, `pulseScoreAvg`, `dataHash`, `brief`) and exposes `latest()`, `getSnapshot()`, `getHistory()`, `healthStreak()`, `isHealthy(minHealth, minStreak)`. An AI agent writes snapshots periodically; the read path is free for any contract or frontend.
+- **Supporting contracts** (all viewable from `/proof`). `PulseOracle.sol` is a composable Solidity contract on a MiniEVM rollup (`initia-pulse-1`) that publishes a circular history of ecosystem snapshots and exposes `latest()`, `healthStreak()`, and `isHealthy(minHealth, minStreak)` — free-to-read for any contract. `PulseGate.sol` is a 30-line reference consumer showing how a DeFi protocol can gate its own operations on the same signal (`require(oracle.isHealthy(2, 3), ...)`). `PulseGov.sol` uses the `ICosmos` precompile to let an EVM wallet on the Pulse rollup cast Initia L1 governance votes via `execute_cosmos(MsgVote)` — demonstrating the Interwoven architecture end-to-end. Full source in `contracts/`.
 
-- **`PulseGate.sol`**. A 30-line reference consumer showing how any DeFi protocol can gate its own operations on Pulse's signal:
-  ```solidity
-  require(oracle.isHealthy(2, 3), "PulseGate: ecosystem health too low");
-  bool emergency = !oracle.isHealthy(1, 1);
-  ```
-
-- **`PulseGov.sol`**. An EVM → Cosmos bridge using the `ICosmos` precompile, letting a wallet on `initia-pulse-1` vote on Initia L1 governance proposals via `execute_cosmos(MsgVote)`. Wired into Ask Pulse: *"vote yes on proposal 42"* generates an executable action card.
-
-- **Native Features**:
-  - **Interwoven Bridge**: Integrated via InterwovenKit's `openBridge` hook for cross-rollup asset movement. Five entry points across the app (widget, chat, wallet portfolio, detail panel, Ask Pulse).
-  - **Auto-Signing Actions** (Ask Pulse): Natural-language transactions. *"send 10 INIT to @alice"*, *"stake 50 INIT on [validator]"*, *"bridge 5 INIT"* — parsed, confirmed, executed via `submitTxBlock` with gas estimated via `estimateGas` + `calculateFee`.
-  - **`.init` usernames**: `useUsernameQuery` resolves `@alice` / `alice.init` to on-chain addresses before tx execution.
-  - **L1 Governance from EVM Rollup**: `PulseGov.sol` uses the `ICosmos` precompile to cast L1 governance votes from the EVM rollup. Demonstrates the Interwoven architecture: Cosmos-native actions triggered from EVM.
+- **Initia-native integrations** (all exposed via the `/ask` execution layer):
+  - **Interwoven Bridge** via InterwovenKit's `openBridge` hook, reachable from five entry points across the app.
+  - **Auto-signing transactions** — natural-language *"send 10 INIT to @alice"*, *"stake 50 INIT on [validator]"*, *"bridge 5 INIT"* — parsed, confirmed, executed via `submitTxBlock` with gas estimated via `estimateGas` + `calculateFee`.
+  - **`.init` usernames** resolved via `useUsernameQuery` before tx execution.
+  - **L1 governance from an EVM rollup** via `PulseGov.sol` + the `ICosmos` precompile — the Cosmos-native `MsgVote` is triggered from the EVM execution environment.
 
 ### How to Run Locally
 
