@@ -65,7 +65,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
             display: "flex", alignItems: "center", gap: 8,
           }}>
             <Home style={{ width: 13, height: 13 }} />
-            Back to Signal
+            Back to Act
           </div>
         </Link>
       </div>

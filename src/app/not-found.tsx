@@ -26,9 +26,9 @@ export default function NotFound() {
         Off the map
       </h1>
       <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: "0 0 28px", lineHeight: 1.6 }}>
-        That route doesn&apos;t exist. Head back to Signal or try Ask Pulse.
+        That route doesn&apos;t exist. Head back to the router, open Proof, or jump to Ask Pulse.
       </p>
-      <div style={{ display: "flex", gap: 10 }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
         <Link href="/" style={{ textDecoration: "none" }}>
           <div style={{
             padding: "11px 18px", borderRadius: 7,
@@ -38,7 +38,17 @@ export default function NotFound() {
             display: "flex", alignItems: "center", gap: 8,
           }}>
             <Home style={{ width: 13, height: 13 }} />
-            Signal
+            Act
+          </div>
+        </Link>
+        <Link href="/proof" style={{ textDecoration: "none" }}>
+          <div style={{
+            padding: "11px 18px", borderRadius: 7,
+            border: "1px solid rgba(167,139,250,0.25)",
+            background: "rgba(167,139,250,0.05)",
+            color: "#A78BFA", fontFamily: MONO, fontSize: 12, fontWeight: 600,
+          }}>
+            Proof
           </div>
         </Link>
         <Link href="/ask" style={{ textDecoration: "none" }}>
