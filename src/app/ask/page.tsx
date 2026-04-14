@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Send,
   Loader2,
@@ -153,12 +154,18 @@ function friendlyTxError(raw: string): string {
   return raw.length > 120 ? raw.slice(0, 120) + "…" : raw;
 }
 
-export default function AskPulsePage() {
+function AskPulsePageInner() {
+  const sp = useSearchParams();
+  // Deep-link from /act's verdict card: the router passes the pre-built
+  // prompt in ?prompt=... (see buildAskPromptRollup/L1 in action-routing).
+  // Fallback to ?q= for one-click share links.
+  const initialQ = sp.get("prompt") ?? sp.get("q") ?? "";
   const [chat, setChat] = useState<ChatMsg[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialQ);
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const didAutoSendRef = useRef(false);
   const {
     openBridge,
     requestTxSync,
@@ -246,6 +253,15 @@ export default function AskPulsePage() {
     },
     [chat, input, loading, network],
   );
+
+  // Auto-send the pre-filled query once when the user lands with ?q=
+  // (deep-link from /act's Execute button). Guarded by a ref so re-renders
+  // triggered by sendMessage's own state changes can't re-fire it.
+  useEffect(() => {
+    if (!initialQ || didAutoSendRef.current) return;
+    didAutoSendRef.current = true;
+    sendMessage(initialQ);
+  }, [initialQ, sendMessage]);
 
   function handleBridge() {
     openBridge({ srcChainId: "initiation-2", srcDenom: "uinit" });
@@ -1611,5 +1627,13 @@ function ActionCard({
         )}
       </div>
     </div>
+  );
+}
+
+export default function AskPulsePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, color: "#5A7A8A", fontFamily: "var(--font-jetbrains), monospace", fontSize: 13 }}>Loading…</div>}>
+      <AskPulsePageInner />
+    </Suspense>
   );
 }

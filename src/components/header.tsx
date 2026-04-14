@@ -178,10 +178,6 @@ export function Header() {
         {/* Nav + Right */}
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
           <span className="nav-links" style={{ display: "contents" }}>
-            <NavLink href="/ask" active={pathname === "/ask"} highlight glow step="">
-              <Sparkles style={{ width: 12, height: 12 }} />
-              Ask Pulse
-            </NavLink>
             <NavLink href="/" active={pathname === "/" || pathname.startsWith("/act")} step="01">Act</NavLink>
             <NavLink
               href="/proof"
@@ -189,6 +185,10 @@ export function Header() {
               step="02"
             >
               Proof
+            </NavLink>
+            <NavLink href="/ask" active={pathname === "/ask"} highlight glow step="">
+              <Sparkles style={{ width: 12, height: 12 }} />
+              Ask Pulse
             </NavLink>
           </span>
 
