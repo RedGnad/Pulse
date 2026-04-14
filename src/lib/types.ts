@@ -101,6 +101,17 @@ export interface ProposalFull extends Proposal {
   analysis?: GovernanceAnalysis;
 }
 
+// ─── Minitia profile (from initia-registry profiles/<name>.json) ─────────────
+// Authoritative metadata curated by Initia Labs — category, description,
+// summary, and the canonical "things users do on this rollup" (vip actions).
+export interface MinitiaProfile {
+  category?: string;           // "DeFi" | "Gaming" | "NFT" | etc.
+  description?: string;        // one-sentence what it does
+  summary?: string;            // shorter variant, sometimes present
+  website?: string;
+  vipActions?: { title: string; description: string }[];
+}
+
 // ─── Minitia (from registry + Rollytics) ─────────────────────────────────────
 export interface MinitiaInfo {
   chainId: string;
@@ -121,6 +132,9 @@ export interface MinitiaInfo {
   isOurs?: boolean;
   /** True for mainnet chains shown as visual reference (greyed out, not interactive data) */
   isMainnetRef?: boolean;
+  /** App profile from the initia-registry profiles/ directory — only present
+   *  for mainnet app-chains. Testnet VM sandboxes have no profile. */
+  profile?: MinitiaProfile;
 }
 
 export interface MinitiaMetrics {

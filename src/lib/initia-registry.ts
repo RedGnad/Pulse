@@ -1,4 +1,4 @@
-import { MinitiaInfo, IbcChannel } from "./types";
+import { MinitiaInfo, IbcChannel, MinitiaProfile } from "./types";
 import type { NetworkMode } from "./initia-client";
 
 const REGISTRY_BASE =
@@ -74,6 +74,33 @@ async function fetchChainJson(
   }
 }
 
+// Raw shape of initia-registry profiles/<slug>.json — we narrow to what we use.
+interface RegistryProfile {
+  category?: string;
+  description?: string;
+  summary?: string;
+  social?: { website?: string };
+  vip?: { actions?: { title: string; description: string }[] };
+}
+
+async function fetchProfile(folder: string): Promise<MinitiaProfile | null> {
+  try {
+    const url = `${REGISTRY_BASE}/profiles/${folder}.json`;
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (!res.ok) return null;
+    const raw = (await res.json()) as RegistryProfile;
+    return {
+      category: raw.category,
+      description: raw.description,
+      summary: raw.summary,
+      website: raw.social?.website,
+      vipActions: raw.vip?.actions,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function parseChain(chain: RegistryChain, folder: string): MinitiaInfo {
   return {
     chainId: chain.chain_id,
@@ -130,11 +157,17 @@ async function fetchMinitiaList(
 ): Promise<MinitiaInfo[]> {
   const results = await Promise.allSettled(
     list.map(async ({ folder, prettyName }) => {
-      const chain = await fetchChainJson(folder, network);
+      // Profile only lives on mainnet app-chains. Testnet VM sandboxes
+      // (move, evm, wasm, strat-testnet) have no profile by design.
+      const [chain, profile] = await Promise.all([
+        fetchChainJson(folder, network),
+        network === "mainnets" ? fetchProfile(folder) : Promise.resolve(null),
+      ]);
       if (chain) {
         const info = parseChain(chain, folder);
         info.prettyName = prettyName;
         if (isMainnetRef) info.isMainnetRef = true;
+        if (profile) info.profile = profile;
         return info;
       }
       return null;

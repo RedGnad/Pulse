@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Zap, Coins, ArrowLeftRight, Send, Vote,
+  Zap, Coins, ArrowLeftRight, Send, Vote, Gamepad2, Palette, TrendingUp,
   CheckCircle2, ShieldAlert, AlertTriangle, AlertCircle,
   ArrowRight, Loader2, Sparkles, Info,
 } from "lucide-react";
@@ -12,30 +12,32 @@ import { useEcosystem } from "@/hooks/use-ecosystem";
 import { deriveRisks, risksForAction, Risk } from "@/lib/risks";
 import { computePulseScore, scoreColor, scoreLabel } from "@/lib/pulse-score";
 import { computeL1Health, L1Health } from "@/lib/l1-health";
-import { MinitiaWithMetrics, EcosystemOverview } from "@/lib/types";
+import {
+  Action, Target, L1_ONLY_ACTIONS, buildTargets,
+} from "@/lib/action-routing";
+import { MinitiaWithMetrics } from "@/lib/types";
 
 const MONO = "var(--font-jetbrains), monospace";
 const SANS = "var(--font-chakra), sans-serif";
 
-type Action = "bridge" | "stake" | "send" | "vote";
-
 const ACTIONS: { id: Action; label: string; Icon: typeof Zap; desc: string }[] = [
-  { id: "bridge", label: "Bridge",  Icon: ArrowLeftRight, desc: "Move assets between rollups or L1" },
-  { id: "stake",  label: "Stake",   Icon: Coins,          desc: "Delegate INIT to a validator" },
-  { id: "send",   label: "Send",    Icon: Send,           desc: "Transfer to another address" },
-  { id: "vote",   label: "Vote",    Icon: Vote,           desc: "Cast a governance vote" },
+  { id: "bridge", label: "Bridge", Icon: ArrowLeftRight, desc: "Move assets between rollups or L1" },
+  { id: "trade",  label: "Trade",  Icon: TrendingUp,     desc: "Swap, perps, lend on a DeFi rollup" },
+  { id: "play",   label: "Play",   Icon: Gamepad2,       desc: "Interact with a gaming rollup" },
+  { id: "mint",   label: "Mint",   Icon: Palette,        desc: "Mint or trade NFTs on a launchpad" },
+  { id: "send",   label: "Send",   Icon: Send,           desc: "Transfer to another address" },
+  { id: "stake",  label: "Stake",  Icon: Coins,          desc: "Delegate INIT to a validator (L1)" },
+  { id: "vote",   label: "Vote",   Icon: Vote,           desc: "Cast a governance vote (L1)" },
 ];
 
-// Which actions are legal on which kind of target.
-// Stake + Vote only make sense on L1 — minitias are OPinit rollups with a
-// single operator, no bonded validators, no gov module.
-const ALLOWS_ROLLUP: Record<Action, boolean> = {
-  bridge: true, send: true, stake: false, vote: false,
-};
-
-type Target =
-  | { kind: "l1"; chainId: string; name: string; score: number; color: string; label: string; health: L1Health }
-  | { kind: "rollup"; chainId: string; name: string; score: number; color: string; label: string; minitia: MinitiaWithMetrics };
+// Maps for the risksForAction filter (which only knows the legacy rollup
+// action vocabulary: bridge/stake/send/vote). Trade/Play/Mint on rollups
+// are all "touch the rollup's state machine", so they inherit bridge-class
+// risks (route degradation, stale data, no IBC path).
+function risksActionKey(action: Action): "bridge" | "stake" | "send" | "vote" {
+  if (action === "stake" || action === "vote" || action === "send" || action === "bridge") return action;
+  return "bridge"; // trade, play, mint → treated like bridge for risk filtering
+}
 
 export default function ActPage() {
   return (
@@ -57,45 +59,6 @@ function useIsNarrow(bp = 900): boolean {
   return narrow;
 }
 
-function buildTargets(action: Action | null, eco: EcosystemOverview): Target[] {
-  const out: Target[] = [];
-
-  // L1 is always a valid target (stake/vote only legal there; bridge/send too)
-  const l1Health = computeL1Health(eco.l1);
-  out.push({
-    kind: "l1",
-    chainId: eco.l1.chainId,
-    name: "Initia L1",
-    score: l1Health.score,
-    color: l1Health.color,
-    label: l1Health.label,
-    health: l1Health,
-  });
-
-  // Rollups only if the action allows them
-  if (action && ALLOWS_ROLLUP[action]) {
-    const minitias = eco.minitias.filter(m => !m.isMainnetRef);
-    const scored = minitias
-      .filter(m => (m.metrics?.blockHeight ?? 0) > 0)
-      .map(m => {
-        const total = computePulseScore(m, minitias, eco.ibcChannels).total;
-        return {
-          kind: "rollup" as const,
-          chainId: m.chainId,
-          name: m.prettyName ?? m.name,
-          score: total,
-          color: scoreColor(total),
-          label: scoreLabel(total),
-          minitia: m,
-        };
-      })
-      .sort((a, b) => b.score - a.score);
-    out.push(...scored);
-  }
-
-  return out;
-}
-
 function ActPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -113,12 +76,30 @@ function ActPageInner() {
     router.replace(qs ? `/act?${qs}` : "/act", { scroll: false });
   }, [action, target, router]);
 
-  const targets = useMemo(() => (eco ? buildTargets(action, eco) : []), [action, eco]);
+  // Score every rollup once (including mainnet app-chains shown as refs, so
+  // users can pick them for Trade/Play/Mint actions).
+  const scoredRollups = useMemo(() => {
+    if (!eco) return [];
+    const all = eco.minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0 || m.profile);
+    return all
+      .map(m => {
+        const total = computePulseScore(m, eco.minitias, eco.ibcChannels).total;
+        return { minitia: m, score: total, color: scoreColor(total), label: scoreLabel(total) };
+      })
+      .sort((a, b) => b.score - a.score);
+  }, [eco]);
+
+  const l1Health = useMemo(() => (eco ? computeL1Health(eco.l1) : null), [eco]);
+
+  const targets = useMemo(() => {
+    if (!eco || !l1Health) return [];
+    return buildTargets(action, eco, l1Health, scoredRollups);
+  }, [action, eco, l1Health, scoredRollups]);
+
   const selectedTarget = target ? targets.find(t => t.chainId === target) ?? null : null;
   const allRisks = useMemo(() => (eco ? deriveRisks(eco) : []), [eco]);
 
-  // If the current target becomes invalid for the new action (e.g. user
-  // picked a rollup then switched to Stake), clear it automatically.
+  // If the current target becomes invalid for the new action, clear it.
   useEffect(() => {
     if (!action || !target) return;
     const stillValid = targets.some(t => t.chainId === target);
@@ -134,10 +115,12 @@ function ActPageInner() {
     );
   }
 
-  const l1OnlyAction = action && !ALLOWS_ROLLUP[action];
+  const l1OnlyAction = action && L1_ONLY_ACTIONS.has(action);
+  const rollupTargetCount = targets.filter(t => t.kind === "rollup").length;
+  const noRollupsForAction = !!action && !l1OnlyAction && rollupTargetCount === 0;
 
   return (
-    <div style={{ maxWidth: 880, margin: "0 auto", padding: "40px 28px 80px" }}>
+    <div style={{ maxWidth: 920, margin: "0 auto", padding: "40px 28px 80px" }}>
 
       <section style={{ marginBottom: 32 }}>
         <div style={{
@@ -157,12 +140,11 @@ function ActPageInner() {
           What are you about to do?
         </h1>
         <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
-          Pulse checks the specific route before you act. If the target is
-          degraded, you see why — and the action is flagged before you broadcast.
+          Pulse checks the specific route before you act. Pick an action, pick a target,
+          and Pulse tells you if that specific rollup is safe for that specific thing.
         </p>
       </section>
 
-      {/* Combined picker */}
       <section style={{
         display: "grid",
         gridTemplateColumns: isNarrow ? "1fr" : "260px 1fr",
@@ -242,25 +224,23 @@ function ActPageInner() {
             )}
           </div>
 
-          {/* Explainer when the action is L1-only */}
           {l1OnlyAction && (
-            <div style={{
-              padding: "11px 14px", marginBottom: 8,
-              borderRadius: 6,
-              border: "1px solid rgba(0,212,255,0.22)",
-              background: "rgba(0,212,255,0.05)",
-              display: "flex", alignItems: "flex-start", gap: 10,
-            }}>
-              <Info style={{ width: 14, height: 14, color: "#00D4FF", flexShrink: 0, marginTop: 2 }} />
-              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.55 }}>
-                <strong style={{ color: "#E0F0FF" }}>
-                  {action === "stake" ? "Staking" : "Governance"} happens on Initia L1.
-                </strong>{" "}
-                Minitias are OPinit rollups run by a single operator — they don&apos;t have
-                bonded validators or a gov module, so {action === "stake" ? "delegation" : "voting"} is only
-                meaningful on L1.
-              </div>
-            </div>
+            <InfoBanner color="#00D4FF">
+              <strong style={{ color: "#E0F0FF" }}>
+                {action === "stake" ? "Staking" : "Governance"} happens on Initia L1.
+              </strong>{" "}
+              Minitias are OPinit rollups run by a single operator — they don&apos;t have
+              bonded validators or a gov module, so {action === "stake" ? "delegation" : "voting"} is only
+              meaningful on L1.
+            </InfoBanner>
+          )}
+
+          {noRollupsForAction && (
+            <InfoBanner color="#FFB800">
+              <strong style={{ color: "#E0F0FF" }}>No rollups in the current snapshot match this action.</strong>{" "}
+              This usually means you&apos;re on testnet (VM sandboxes only). Switch to mainnet
+              to see the real app-chains — Blackwing, Echelon, Rave for Trade; Civitia, Yominet for Play; Intergaze for Mint.
+            </InfoBanner>
           )}
 
           <div style={{
@@ -276,43 +256,49 @@ function ActPageInner() {
                   key={t.chainId}
                   onClick={() => setTarget(t.chainId)}
                   style={{
-                    padding: "11px 13px",
+                    padding: "12px 14px",
                     borderRadius: 6,
                     border: isActive ? `1px solid ${t.color}55` : "1px solid rgba(255,255,255,0.04)",
                     background: isActive ? `${t.color}10` : "rgba(10,18,24,0.5)",
                     cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 10,
+                    display: "flex", alignItems: "flex-start", gap: 11,
                     textAlign: "left",
                   }}
                 >
                   <span style={{
                     width: 8, height: 8, borderRadius: "50%", background: t.color,
-                    boxShadow: `0 0 8px ${t.color}`, flexShrink: 0,
+                    boxShadow: `0 0 8px ${t.color}`, flexShrink: 0, marginTop: 6,
                   }} />
-                  <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: "#E0F0FF", flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
-                    {t.name}
-                    {t.kind === "l1" && (
-                      <span style={{
-                        fontFamily: MONO, fontSize: 9, fontWeight: 700,
-                        color: "#00D4FF", letterSpacing: "0.08em",
-                        padding: "2px 6px", borderRadius: 2,
-                        background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
-                      }}>
-                        L1
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: "#E0F0FF" }}>
+                        {t.name}
                       </span>
+                      {t.category && (
+                        <CategoryBadge category={t.category} />
+                      )}
+                      <span style={{ fontFamily: MONO, fontSize: 9, color: "#5A7A8A" }}>
+                        {t.chainId}
+                      </span>
+                      <span style={{
+                        marginLeft: "auto",
+                        fontFamily: MONO, fontSize: 10, fontWeight: 700, color: t.color,
+                        padding: "3px 8px", borderRadius: 3,
+                        background: `${t.color}12`, border: `1px solid ${t.color}25`,
+                        letterSpacing: "0.05em",
+                      }}>
+                        {t.label} · {t.score}
+                      </span>
+                    </div>
+                    {t.description && (
+                      <div style={{
+                        fontFamily: MONO, fontSize: 10, color: "#8AB4C8",
+                        marginTop: 4, lineHeight: 1.5,
+                      }}>
+                        {t.description}
+                      </div>
                     )}
-                  </span>
-                  <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A" }}>
-                    {t.chainId}
-                  </span>
-                  <span style={{
-                    fontFamily: MONO, fontSize: 10, fontWeight: 700, color: t.color,
-                    padding: "3px 8px", borderRadius: 3,
-                    background: `${t.color}12`, border: `1px solid ${t.color}25`,
-                    letterSpacing: "0.05em",
-                  }}>
-                    {t.label} · {t.score}
-                  </span>
+                  </div>
                 </button>
               );
             })}
@@ -320,7 +306,6 @@ function ActPageInner() {
         </div>
       </section>
 
-      {/* Unknown target */}
       {action && target && !selectedTarget && (
         <section style={{
           padding: 16, marginBottom: 24,
@@ -352,14 +337,13 @@ function ActPageInner() {
         </section>
       )}
 
-      {/* Verdict */}
       {action && selectedTarget && (
         selectedTarget.kind === "rollup" ? (
           <RollupVerdict
             action={action}
             minitia={selectedTarget.minitia}
             score={selectedTarget.score}
-            risks={risksForAction(allRisks, action, selectedTarget.chainId)}
+            risks={risksForAction(allRisks, risksActionKey(action), selectedTarget.chainId)}
             onReset={() => { setAction(null); setTarget(null); }}
           />
         ) : (
@@ -390,7 +374,44 @@ function StepDot({ n, active }: { n: number; active: boolean }) {
   );
 }
 
-// ─── Rollup verdict (existing flow) ───────────────────────────────────────
+function InfoBanner({ color, children }: { color: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      padding: "11px 14px", marginBottom: 8,
+      borderRadius: 6,
+      border: `1px solid ${color}38`,
+      background: `${color}0D`,
+      display: "flex", alignItems: "flex-start", gap: 10,
+    }}>
+      <Info style={{ width: 14, height: 14, color, flexShrink: 0, marginTop: 2 }} />
+      <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.55 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function CategoryBadge({ category }: { category: string }) {
+  const palette: Record<string, string> = {
+    "L1":     "#00FF88",
+    "DeFi":   "#00D4FF",
+    "Gaming": "#A78BFA",
+    "NFT":    "#FFB800",
+  };
+  const color = palette[category] ?? "#5A7A8A";
+  return (
+    <span style={{
+      fontFamily: MONO, fontSize: 9, fontWeight: 700,
+      color, letterSpacing: "0.08em",
+      padding: "2px 6px", borderRadius: 2,
+      background: `${color}12`, border: `1px solid ${color}28`,
+    }}>
+      {category.toUpperCase()}
+    </span>
+  );
+}
+
+// ─── Rollup verdict ───────────────────────────────────────────────────────
 function RollupVerdict({ action, minitia, score, risks, onReset }: {
   action: Action; minitia: MinitiaWithMetrics; score: number; risks: Risk[]; onReset: () => void;
 }) {
@@ -412,6 +433,7 @@ function RollupVerdict({ action, minitia, score, risks, onReset }: {
 
   const askPrompt = buildAskPromptRollup(action, minitia, verdict);
   const askHref = `/ask?prompt=${encodeURIComponent(askPrompt)}`;
+  const category = minitia.profile?.category;
 
   return (
     <VerdictShell
@@ -419,7 +441,7 @@ function RollupVerdict({ action, minitia, score, risks, onReset }: {
       Icon={Icon}
       label={meta.label}
       headline={meta.headline}
-      subline={`${action.toUpperCase()} · ${minitia.prettyName ?? minitia.name} · pulse score ${score}/100`}
+      subline={`${action.toUpperCase()} · ${minitia.prettyName ?? minitia.name}${category ? ` · ${category}` : ""} · pulse score ${score}/100`}
       onReset={onReset}
       askHref={askHref}
       blocked={verdict === "block"}
@@ -428,26 +450,32 @@ function RollupVerdict({ action, minitia, score, risks, onReset }: {
         ? "Pulse will not pre-fill this action while the route is degraded."
         : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
     >
+      {minitia.profile?.description && (
+        <div style={{
+          fontFamily: MONO, fontSize: 11, color: "#8AB4C8",
+          lineHeight: 1.55, marginBottom: 14,
+          paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.05)",
+        }}>
+          {minitia.profile.description}
+        </div>
+      )}
       {risks.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {risks.map(r => <RiskRow key={r.id} risk={r} />)}
         </div>
       ) : (
         <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
-          No risks of type <strong style={{ color: "#E0F0FF" }}>{action}</strong> currently apply to this rollup. The specific route is safe.
+          No risks affecting <strong style={{ color: "#E0F0FF" }}>{action}</strong> currently apply to this rollup. The specific route is safe.
         </div>
       )}
     </VerdictShell>
   );
 }
 
-// ─── L1 verdict (stake/vote/bridge/send on L1) ────────────────────────────
+// ─── L1 verdict ────────────────────────────────────────────────────────────
 function L1Verdict({ action, health, chainId, onReset }: {
   action: Action; health: L1Health; chainId: string; onReset: () => void;
 }) {
-  // L1 verdict rules:
-  //   score < 25 → block, < 50 → warn, else allow
-  //   vote with zero active proposals → info (not blocking, but honest)
   const baseVerdict: "allow" | "warn" | "block" =
     health.score < 25 ? "block" :
     health.score < 50 ? "warn" :
@@ -481,7 +509,6 @@ function L1Verdict({ action, health, chainId, onReset }: {
         ? "Pulse will not pre-fill this action while L1 is unhealthy."
         : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
     >
-      {/* L1 metrics strip */}
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12,
       }}>
@@ -542,7 +569,6 @@ function L1Metric({ label, value, color }: { label: string; value: string; color
   );
 }
 
-// ─── Shared verdict shell ─────────────────────────────────────────────────
 function VerdictShell({
   color, Icon, label, headline, subline, onReset, askHref, blocked, askHeadline, askSub, children,
 }: {
@@ -659,12 +685,15 @@ function RiskRow({ risk }: { risk: Risk }) {
 function buildAskPromptRollup(action: Action, m: MinitiaWithMetrics, verdict: "allow" | "warn" | "block"): string {
   const name = m.prettyName ?? m.name;
   if (verdict === "block") {
-    return `Pulse just blocked a ${action} to ${name} (${m.chainId}). Explain which specific risks caused the block.`;
+    return `Pulse just blocked a ${action} on ${name} (${m.chainId}). Explain which specific risks caused the block.`;
   }
   switch (action) {
     case "bridge": return `I want to bridge to ${name} (${m.chainId}). The Pulse signal says ${verdict}. Walk me through the safest route.`;
-    case "stake":  return `I want to stake on ${name} (${m.chainId}). The Pulse signal says ${verdict}. Which validator is safest right now?`;
+    case "trade":  return `I want to trade on ${name} (${m.chainId}). Pulse says ${verdict}. What's the current state of the rollup and what can I do there?`;
+    case "play":   return `I want to interact with ${name} (${m.chainId}). Pulse says ${verdict}. What's live on this rollup right now?`;
+    case "mint":   return `I want to mint or trade NFTs on ${name} (${m.chainId}). Pulse says ${verdict}. Is the launchpad live?`;
     case "send":   return `I want to send tokens on ${name} (${m.chainId}). Confirm the chain is live and set up the transfer.`;
+    case "stake":  return `I want to stake on ${name} (${m.chainId}). Pulse says ${verdict}.`;
     case "vote":   return `Any active governance proposals on ${name} (${m.chainId}) I should vote on? Pulse says ${verdict}.`;
   }
 }
@@ -678,5 +707,9 @@ function buildAskPromptL1(action: Action, chainId: string, verdict: "allow" | "w
     case "vote":   return `Show me the active governance proposals on Initia L1 (${chainId}) and tell me which way the ecosystem is leaning.`;
     case "bridge": return `I want to bridge to Initia L1 (${chainId}). Pulse says ${verdict}. What's the safest route in?`;
     case "send":   return `I want to send tokens on Initia L1 (${chainId}). Confirm the chain is live and set up the transfer.`;
+    case "trade":
+    case "play":
+    case "mint":
+      return `${action.toUpperCase()} isn't a native L1 action — walk me through what I should do instead on Initia.`;
   }
 }
