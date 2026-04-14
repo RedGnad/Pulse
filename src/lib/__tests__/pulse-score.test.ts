@@ -39,7 +39,7 @@ describe("computePulseScore", () => {
     const result = computePulseScore(m, [m]);
     expect(result.total).toBe(0);
     expect(result.activity).toBe(0);
-    expect(result.decentralization).toBe(0);
+    expect(result.settlement).toBe(0);
   });
 
   it("returns non-zero scores for healthy minitia", () => {
@@ -58,11 +58,14 @@ describe("computePulseScore", () => {
     expect(scoreHigh.activity).toBeGreaterThan(scoreLow.activity);
   });
 
-  it("decentralization score increases with more validators", () => {
-    const one = makeMinitia({ activeValidators: 1 });
-    const many = makeMinitia({ activeValidators: 15 });
-    expect(computePulseScore(many, [many]).decentralization)
-      .toBeGreaterThan(computePulseScore(one, [one]).decentralization);
+  it("settlement score rewards L1 anchoring (OPinit bridge + IBC to Initia L1)", () => {
+    const anchored = { ...makeMinitia({ chainId: "anchored-1" }), bridgeId: 42 } as MinitiaWithMetrics;
+    const orphan = makeMinitia({ chainId: "orphan-1" });
+    const channels = [makeIbcChannel(anchored.chainId, "initiation-2")];
+    const scoreAnchored = computePulseScore(anchored, [anchored], channels);
+    const scoreOrphan = computePulseScore(orphan, [orphan], []);
+    expect(scoreAnchored.settlement).toBeGreaterThan(scoreOrphan.settlement);
+    expect(scoreAnchored.settlement).toBeGreaterThanOrEqual(100);
   });
 
   it("bridge score is higher with bridge + IBC channels", () => {
@@ -110,7 +113,7 @@ describe("computePulseScore", () => {
   it("all sub-scores are 0-100", () => {
     const m = makeMinitia();
     const result = computePulseScore(m, [m]);
-    for (const key of ["activity", "decentralization", "bridge", "growth", "uptime"] as const) {
+    for (const key of ["activity", "settlement", "bridge", "growth", "uptime"] as const) {
       expect(result[key]).toBeGreaterThanOrEqual(0);
       expect(result[key]).toBeLessThanOrEqual(100);
     }

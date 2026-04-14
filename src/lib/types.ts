@@ -139,7 +139,7 @@ export interface MinitiaMetrics {
 
 export interface PulseScore {
   activity: number;
-  decentralization: number;
+  settlement: number;
   bridge: number;
   growth: number;
   uptime: number;

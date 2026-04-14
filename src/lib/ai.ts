@@ -691,7 +691,7 @@ export async function chatWithEcosystem(
   const scoreContext = data.minitias
     .filter(m => m.pulseScore && (m.metrics?.blockHeight ?? 0) > 0)
     .sort((a, b) => (b.pulseScore?.total ?? 0) - (a.pulseScore?.total ?? 0))
-    .map(m => `- ${m.prettyName}: ${m.pulseScore!.total}/100 (activity:${m.pulseScore!.activity} decentralization:${m.pulseScore!.decentralization} bridge:${m.pulseScore!.bridge} growth:${m.pulseScore!.growth} uptime:${m.pulseScore!.uptime})`)
+    .map(m => `- ${m.prettyName}: ${m.pulseScore!.total}/100 (activity:${m.pulseScore!.activity} settlement:${m.pulseScore!.settlement} bridge:${m.pulseScore!.bridge} growth:${m.pulseScore!.growth} uptime:${m.pulseScore!.uptime})`)
     .join("\n");
 
   const fullContext = scoreContext
@@ -718,7 +718,7 @@ FORMATTING RULES:
 - Be thorough but concise. Use 3-8 sentences.
 - You may use simple line breaks to separate ideas, but avoid heavy markdown.
 - Reference Pulse Scores (0-100) when comparing chains — they are computed from live data.
-- If the user asks about a specific chain, mention its Pulse Score breakdown (activity, decentralization, bridge, growth, uptime).
+- If the user asks about a specific chain, mention its Pulse Score breakdown (activity, settlement, bridge, growth, uptime). "Settlement" reflects whether the rollup is anchored to Initia L1 via OPinit bridge + IBC — it is NOT validator count, since minitias are OPinit rollups with a single operator by design.
 - When mentioning bridging, tell the user they can bridge directly from this page.
 - Users can execute on-chain actions via natural language. If they say "send 10 INIT to init1...", "stake 50 INIT on Maestro", or "bridge 5 INIT", the app will show an executable action card with auto-signing. Confirm the action details in your response when you detect these intents.
 

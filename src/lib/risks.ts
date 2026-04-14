@@ -286,10 +286,10 @@ function deriveIbcRisks(channels: IbcChannel[], minitias: MinitiaWithMetrics[]):
   return out;
 }
 
-function weakestFactors(b: { activity: number; decentralization: number; bridge: number; growth: number; uptime: number }): string[] {
+function weakestFactors(b: { activity: number; settlement: number; bridge: number; growth: number; uptime: number }): string[] {
   const pairs: [string, number][] = [
     ["activity", b.activity],
-    ["decentralization", b.decentralization],
+    ["settlement", b.settlement],
     ["connectivity", b.bridge],
     ["growth", b.growth],
     ["uptime", b.uptime],

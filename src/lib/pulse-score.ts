@@ -3,23 +3,30 @@ import { MinitiaWithMetrics, IbcChannel } from "./types";
 // ─── Pulse Score: 0–100 health rating per minitia ──────────────────────────
 //
 // Formula:
-//   Activity          (25%) — tx volume relative to ecosystem max
-//   Decentralization  (20%) — validator count + voting power distribution
-//   Connectivity      (20%) — OPinit bridge + IBC channel count
-//   Growth            (15%) — recent block tx activity
-//   Uptime            (15%) — block freshness + avg block time
-//   Liquidity          (5%) — token supply presence
+//   Activity     (25%) — tx volume relative to ecosystem max
+//   Settlement   (20%) — OPinit bridge to L1 + IBC path to Initia L1
+//   Connectivity (20%) — OPinit bridge presence + IBC channel count + gas util
+//   Growth       (15%) — recent block tx activity
+//   Uptime       (15%) — block freshness + avg block time
+//   Liquidity     (5%) — token supply presence
 //
-// Each sub-score is 0–100, then weighted and summed.
+// NOTE on the Settlement axis: minitias are OPinit optimistic rollups. By
+// design they run a single operator without economic stake, so traditional
+// "validator count" does not apply. What actually matters for a rollup is
+// whether it is anchored to Initia L1 — the OPHost bridge and an IBC path
+// back to L1 are the two observable proofs of that anchoring.
 
 interface ScoreBreakdown {
   activity: number;
-  decentralization: number;
+  settlement: number;
   bridge: number;
   growth: number;
   uptime: number;
   total: number;
 }
+
+// Initia L1 chain ids across networks. Settlement is measured against these.
+const INITIA_L1_CHAIN_IDS = new Set<string>(["initiation-2", "interwoven-1"]);
 
 export function computePulseScore(
   minitia: MinitiaWithMetrics,
@@ -28,7 +35,7 @@ export function computePulseScore(
 ): ScoreBreakdown {
   const m = minitia.metrics;
   if (!m || m.blockHeight === 0) {
-    return { activity: 0, decentralization: 0, bridge: 0, growth: 0, uptime: 0, total: 0 };
+    return { activity: 0, settlement: 0, bridge: 0, growth: 0, uptime: 0, total: 0 };
   }
 
   // ── Activity (25%) — tx count relative to max, log-scaled
@@ -37,21 +44,28 @@ export function computePulseScore(
   const activity = m.totalTxCount === 0 ? 0
     : Math.min(100, Math.round(30 + 70 * Math.log10(1 + txRatio * 9) / Math.log10(10)));
 
-  // ── Decentralization (20%) — validator count + voting power concentration
-  const vals = m.activeValidators ?? 0;
-  let decentralization = vals === 0 ? 20
-    : vals === 1 ? 50
-    : vals <= 3 ? 70
-    : vals <= 10 ? 85
-    : 100;
-  // Bonus/penalty: if L1 validators have concentrated voting power, penalize
-  // (not applicable per-rollup since rollups typically have 1 sequencer)
-  if (vals > 1) {
-    decentralization = Math.min(100, decentralization + 5); // multi-validator = healthier
-  }
-
-  // ── Connectivity (20%) — OPinit bridge + IBC channels
+  // ── Settlement (20%) — anchoring to Initia L1
+  //   OPinit bridge registered on L1      → +60  (settlement path exists)
+  //   IBC transfer channel to Initia L1   → +30  (asset path back to L1)
+  //   Both present                        → +10  (fully anchored bonus)
+  // Floor at 20 so a chain with neither still scores above zero — we have
+  // no evidence it is unsafe, only no evidence it is anchored.
   const hasBridge = minitia.bridgeId !== undefined && minitia.bridgeId > 0;
+  const ibcToL1 = ibcChannels
+    ? ibcChannels.some(ch =>
+        ch.portId === "transfer" && (
+          (ch.sourceChainId === minitia.chainId && INITIA_L1_CHAIN_IDS.has(ch.destChainId)) ||
+          (ch.destChainId === minitia.chainId && INITIA_L1_CHAIN_IDS.has(ch.sourceChainId))
+        )
+      )
+    : false;
+  let settlement = 20;
+  if (hasBridge) settlement += 60;
+  if (ibcToL1)  settlement += 30;
+  if (hasBridge && ibcToL1) settlement = Math.min(100, settlement + 10);
+  settlement = Math.min(100, settlement);
+
+  // ── Connectivity (20%) — OPinit bridge + IBC channels + gas utilization
   const chainIbcCount = ibcChannels
     ? ibcChannels.filter(ch =>
         ch.portId === "transfer" &&
@@ -61,9 +75,8 @@ export function computePulseScore(
   const gasRatio = (m.lastBlockGasWanted ?? 0) > 0
     ? (m.lastBlockGasUsed ?? 0) / m.lastBlockGasWanted!
     : 0;
-  // Bridge: 0-40 from bridge presence, 0-30 from IBC channels, 0-30 from gas utilization
   const bridgeBase = hasBridge ? 40 : 10;
-  const ibcScore = Math.min(30, chainIbcCount * 10); // 1 channel=10, 2=20, 3+=30
+  const ibcScore = Math.min(30, chainIbcCount * 10);
   const gasScore = Math.round(gasRatio * 30);
   const bridge = Math.min(100, bridgeBase + ibcScore + gasScore);
 
@@ -97,18 +110,18 @@ export function computePulseScore(
   const liquidity = !hasSupply ? 20
     : supplyCount === 1 ? 50
     : supplyCount <= 3 ? 70
-    : 100; // multiple denoms = richer ecosystem
+    : 100;
 
   const total = Math.min(100, Math.round(
     activity * 0.25 +
-    decentralization * 0.20 +
+    settlement * 0.20 +
     bridge * 0.20 +
     growth * 0.15 +
     uptime * 0.15 +
     liquidity * 0.05
   ));
 
-  return { activity, decentralization, bridge, growth, uptime, total };
+  return { activity, settlement, bridge, growth, uptime, total };
 }
 
 export function computeAllPulseScores(
@@ -123,10 +136,10 @@ export function computeAllPulseScores(
 }
 
 export function scoreColor(score: number): string {
-  if (score >= 75) return "#00FF88"; // green — healthy
-  if (score >= 50) return "#00D4FF"; // cyan — decent
-  if (score >= 25) return "#FFB800"; // amber — weak
-  return "#FF3366";                  // red — critical
+  if (score >= 75) return "#00FF88";
+  if (score >= 50) return "#00D4FF";
+  if (score >= 25) return "#FFB800";
+  return "#FF3366";
 }
 
 export function scoreLabel(score: number): string {
