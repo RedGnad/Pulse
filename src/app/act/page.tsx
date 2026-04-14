@@ -6,12 +6,13 @@ import Link from "next/link";
 import {
   Zap, Coins, ArrowLeftRight, Send, Vote,
   CheckCircle2, ShieldAlert, AlertTriangle, AlertCircle,
-  ArrowRight, Loader2, Sparkles,
+  ArrowRight, Loader2, Sparkles, Info,
 } from "lucide-react";
 import { useEcosystem } from "@/hooks/use-ecosystem";
 import { deriveRisks, risksForAction, Risk } from "@/lib/risks";
 import { computePulseScore, scoreColor, scoreLabel } from "@/lib/pulse-score";
-import { MinitiaWithMetrics } from "@/lib/types";
+import { computeL1Health, L1Health } from "@/lib/l1-health";
+import { MinitiaWithMetrics, EcosystemOverview } from "@/lib/types";
 
 const MONO = "var(--font-jetbrains), monospace";
 const SANS = "var(--font-chakra), sans-serif";
@@ -24,6 +25,17 @@ const ACTIONS: { id: Action; label: string; Icon: typeof Zap; desc: string }[] =
   { id: "send",   label: "Send",    Icon: Send,           desc: "Transfer to another address" },
   { id: "vote",   label: "Vote",    Icon: Vote,           desc: "Cast a governance vote" },
 ];
+
+// Which actions are legal on which kind of target.
+// Stake + Vote only make sense on L1 — minitias are OPinit rollups with a
+// single operator, no bonded validators, no gov module.
+const ALLOWS_ROLLUP: Record<Action, boolean> = {
+  bridge: true, send: true, stake: false, vote: false,
+};
+
+type Target =
+  | { kind: "l1"; chainId: string; name: string; score: number; color: string; label: string; health: L1Health }
+  | { kind: "rollup"; chainId: string; name: string; score: number; color: string; label: string; minitia: MinitiaWithMetrics };
 
 export default function ActPage() {
   return (
@@ -45,6 +57,45 @@ function useIsNarrow(bp = 900): boolean {
   return narrow;
 }
 
+function buildTargets(action: Action | null, eco: EcosystemOverview): Target[] {
+  const out: Target[] = [];
+
+  // L1 is always a valid target (stake/vote only legal there; bridge/send too)
+  const l1Health = computeL1Health(eco.l1);
+  out.push({
+    kind: "l1",
+    chainId: eco.l1.chainId,
+    name: "Initia L1",
+    score: l1Health.score,
+    color: l1Health.color,
+    label: l1Health.label,
+    health: l1Health,
+  });
+
+  // Rollups only if the action allows them
+  if (action && ALLOWS_ROLLUP[action]) {
+    const minitias = eco.minitias.filter(m => !m.isMainnetRef);
+    const scored = minitias
+      .filter(m => (m.metrics?.blockHeight ?? 0) > 0)
+      .map(m => {
+        const total = computePulseScore(m, minitias, eco.ibcChannels).total;
+        return {
+          kind: "rollup" as const,
+          chainId: m.chainId,
+          name: m.prettyName ?? m.name,
+          score: total,
+          color: scoreColor(total),
+          label: scoreLabel(total),
+          minitia: m,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+    out.push(...scored);
+  }
+
+  return out;
+}
+
 function ActPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
@@ -54,7 +105,6 @@ function ActPageInner() {
   const [action, setAction] = useState<Action | null>((sp.get("action") as Action) ?? null);
   const [target, setTarget] = useState<string | null>(sp.get("target"));
 
-  // Sync URL when state changes
   useEffect(() => {
     const params = new URLSearchParams();
     if (action) params.set("action", action);
@@ -63,23 +113,17 @@ function ActPageInner() {
     router.replace(qs ? `/act?${qs}` : "/act", { scroll: false });
   }, [action, target, router]);
 
-  const minitias: MinitiaWithMetrics[] = useMemo(
-    () => eco?.minitias.filter(m => !m.isMainnetRef) ?? [],
-    [eco],
-  );
-
-  const scored = useMemo(() => {
-    if (!eco) return [];
-    return minitias.map(m => ({
-      minitia: m,
-      score: computePulseScore(m, minitias, eco.ibcChannels).total,
-    })).sort((a, b) => b.score - a.score);
-  }, [minitias, eco]);
-
+  const targets = useMemo(() => (eco ? buildTargets(action, eco) : []), [action, eco]);
+  const selectedTarget = target ? targets.find(t => t.chainId === target) ?? null : null;
   const allRisks = useMemo(() => (eco ? deriveRisks(eco) : []), [eco]);
 
-  const targetMinitia = target ? minitias.find(m => m.chainId === target) : null;
-  const targetScored = target ? scored.find(s => s.minitia.chainId === target) : null;
+  // If the current target becomes invalid for the new action (e.g. user
+  // picked a rollup then switched to Stake), clear it automatically.
+  useEffect(() => {
+    if (!action || !target) return;
+    const stillValid = targets.some(t => t.chainId === target);
+    if (!stillValid) setTarget(null);
+  }, [action, target, targets]);
 
   if (isLoading || !eco) {
     return (
@@ -90,10 +134,11 @@ function ActPageInner() {
     );
   }
 
+  const l1OnlyAction = action && !ALLOWS_ROLLUP[action];
+
   return (
     <div style={{ maxWidth: 880, margin: "0 auto", padding: "40px 28px 80px" }}>
 
-      {/* Hero */}
       <section style={{ marginBottom: 32 }}>
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 6,
@@ -112,32 +157,23 @@ function ActPageInner() {
           What are you about to do?
         </h1>
         <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
-          Pulse checks the specific route before you act. If the target rollup is
+          Pulse checks the specific route before you act. If the target is
           degraded, you see why — and the action is flagged before you broadcast.
         </p>
       </section>
 
-      {/* Combined picker — action + target on one screen */}
+      {/* Combined picker */}
       <section style={{
         display: "grid",
         gridTemplateColumns: isNarrow ? "1fr" : "260px 1fr",
         gap: 16,
         marginBottom: 24,
       }}>
-        {/* Left: action column */}
+        {/* Action column */}
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{
-              width: 20, height: 20, borderRadius: "50%",
-              border: "1px solid rgba(0,255,136,0.4)", background: "rgba(0,255,136,0.08)",
-              color: "#00FF88", fontFamily: MONO, fontSize: 10, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              1
-            </span>
-            <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
-              Action
-            </span>
+            <StepDot n={1} active />
+            <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>Action</span>
           </div>
           <div style={{
             display: "grid",
@@ -158,7 +194,7 @@ function ActPageInner() {
                     cursor: "pointer",
                     display: "flex",
                     flexDirection: isNarrow ? "column" : "row",
-                    alignItems: isNarrow ? "center" : "center",
+                    alignItems: "center",
                     gap: isNarrow ? 4 : 10,
                     textAlign: isNarrow ? "center" : "left",
                     transition: "all 0.15s",
@@ -184,77 +220,98 @@ function ActPageInner() {
           </div>
         </div>
 
-        {/* Right: target column */}
+        {/* Target column */}
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <span style={{
-              width: 20, height: 20, borderRadius: "50%",
-              border: action ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(90,122,138,0.3)",
-              background: action ? "rgba(0,255,136,0.08)" : "transparent",
-              color: action ? "#00FF88" : "#5A7A8A",
-              fontFamily: MONO, fontSize: 10, fontWeight: 700,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              2
-            </span>
+            <StepDot n={2} active={!!action} />
             <span style={{
               fontFamily: SANS, fontSize: 13, fontWeight: 700,
               color: action ? "#E0F0FF" : "#5A7A8A",
             }}>
-              Target rollup
+              Target
             </span>
             {!action && (
               <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", marginLeft: "auto" }}>
                 pick an action first
               </span>
             )}
-            {action && (
+            {action && !l1OnlyAction && (
               <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", marginLeft: "auto" }}>
                 sorted by pulse score
               </span>
             )}
           </div>
+
+          {/* Explainer when the action is L1-only */}
+          {l1OnlyAction && (
+            <div style={{
+              padding: "11px 14px", marginBottom: 8,
+              borderRadius: 6,
+              border: "1px solid rgba(0,212,255,0.22)",
+              background: "rgba(0,212,255,0.05)",
+              display: "flex", alignItems: "flex-start", gap: 10,
+            }}>
+              <Info style={{ width: 14, height: 14, color: "#00D4FF", flexShrink: 0, marginTop: 2 }} />
+              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.55 }}>
+                <strong style={{ color: "#E0F0FF" }}>
+                  {action === "stake" ? "Staking" : "Governance"} happens on Initia L1.
+                </strong>{" "}
+                Minitias are OPinit rollups run by a single operator — they don&apos;t have
+                bonded validators or a gov module, so {action === "stake" ? "delegation" : "voting"} is only
+                meaningful on L1.
+              </div>
+            </div>
+          )}
+
           <div style={{
             display: "flex", flexDirection: "column", gap: 5,
             opacity: action ? 1 : 0.4,
             pointerEvents: action ? "auto" : "none",
             transition: "opacity 0.2s",
           }}>
-            {scored.map(({ minitia: m, score }) => {
-              const isActive = target === m.chainId;
-              const color = scoreColor(score);
-              const label = scoreLabel(score);
+            {targets.map(t => {
+              const isActive = target === t.chainId;
               return (
                 <button
-                  key={m.chainId}
-                  onClick={() => setTarget(m.chainId)}
+                  key={t.chainId}
+                  onClick={() => setTarget(t.chainId)}
                   style={{
                     padding: "11px 13px",
                     borderRadius: 6,
-                    border: isActive ? `1px solid ${color}55` : "1px solid rgba(255,255,255,0.04)",
-                    background: isActive ? `${color}10` : "rgba(10,18,24,0.5)",
+                    border: isActive ? `1px solid ${t.color}55` : "1px solid rgba(255,255,255,0.04)",
+                    background: isActive ? `${t.color}10` : "rgba(10,18,24,0.5)",
                     cursor: "pointer",
                     display: "flex", alignItems: "center", gap: 10,
                     textAlign: "left",
                   }}
                 >
                   <span style={{
-                    width: 8, height: 8, borderRadius: "50%", background: color,
-                    boxShadow: `0 0 8px ${color}`, flexShrink: 0,
+                    width: 8, height: 8, borderRadius: "50%", background: t.color,
+                    boxShadow: `0 0 8px ${t.color}`, flexShrink: 0,
                   }} />
-                  <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: "#E0F0FF", flex: 1 }}>
-                    {m.prettyName ?? m.name}
+                  <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: "#E0F0FF", flex: 1, display: "flex", alignItems: "center", gap: 8 }}>
+                    {t.name}
+                    {t.kind === "l1" && (
+                      <span style={{
+                        fontFamily: MONO, fontSize: 9, fontWeight: 700,
+                        color: "#00D4FF", letterSpacing: "0.08em",
+                        padding: "2px 6px", borderRadius: 2,
+                        background: "rgba(0,212,255,0.08)", border: "1px solid rgba(0,212,255,0.2)",
+                      }}>
+                        L1
+                      </span>
+                    )}
                   </span>
                   <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A" }}>
-                    {m.chainId}
+                    {t.chainId}
                   </span>
                   <span style={{
-                    fontFamily: MONO, fontSize: 10, fontWeight: 700, color,
+                    fontFamily: MONO, fontSize: 10, fontWeight: 700, color: t.color,
                     padding: "3px 8px", borderRadius: 3,
-                    background: `${color}12`, border: `1px solid ${color}25`,
+                    background: `${t.color}12`, border: `1px solid ${t.color}25`,
                     letterSpacing: "0.05em",
                   }}>
-                    {label} · {score}
+                    {t.label} · {t.score}
                   </span>
                 </button>
               );
@@ -263,8 +320,8 @@ function ActPageInner() {
         </div>
       </section>
 
-      {/* Target in URL that doesn't match any known rollup */}
-      {action && target && !targetMinitia && (
+      {/* Unknown target */}
+      {action && target && !selectedTarget && (
         <section style={{
           padding: 16, marginBottom: 24,
           borderRadius: 8,
@@ -275,10 +332,10 @@ function ActPageInner() {
           <AlertCircle style={{ width: 18, height: 18, color: "#FFB800", flexShrink: 0, marginTop: 1 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF", marginBottom: 3 }}>
-              Rollup <code style={{ color: "#FFB800" }}>{target}</code> is not in the Initia registry
+              Target <code style={{ color: "#FFB800" }}>{target}</code> is not valid for this action
             </div>
             <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.6 }}>
-              Pulse couldn&apos;t find this chain in the current snapshot. Pick a target from the list above, or reset the flow.
+              Either the chain isn&apos;t in the registry, or the action isn&apos;t available on it. Pick a target from the list above.
             </div>
           </div>
           <button
@@ -295,27 +352,51 @@ function ActPageInner() {
         </section>
       )}
 
-      {/* Step 3 — verdict */}
-      {action && target && targetMinitia && targetScored && (
-        <Verdict
-          action={action}
-          minitia={targetMinitia}
-          score={targetScored.score}
-          risks={risksForAction(allRisks, action, target)}
-          onReset={() => { setAction(null); setTarget(null); }}
-        />
+      {/* Verdict */}
+      {action && selectedTarget && (
+        selectedTarget.kind === "rollup" ? (
+          <RollupVerdict
+            action={action}
+            minitia={selectedTarget.minitia}
+            score={selectedTarget.score}
+            risks={risksForAction(allRisks, action, selectedTarget.chainId)}
+            onReset={() => { setAction(null); setTarget(null); }}
+          />
+        ) : (
+          <L1Verdict
+            action={action}
+            health={selectedTarget.health}
+            chainId={selectedTarget.chainId}
+            onReset={() => { setAction(null); setTarget(null); }}
+          />
+        )
       )}
     </div>
   );
 }
 
-function Verdict({ action, minitia, score, risks, onReset }: {
+function StepDot({ n, active }: { n: number; active: boolean }) {
+  return (
+    <span style={{
+      width: 20, height: 20, borderRadius: "50%",
+      border: active ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(90,122,138,0.3)",
+      background: active ? "rgba(0,255,136,0.08)" : "transparent",
+      color: active ? "#00FF88" : "#5A7A8A",
+      fontFamily: MONO, fontSize: 10, fontWeight: 700,
+      display: "flex", alignItems: "center", justifyContent: "center",
+    }}>
+      {n}
+    </span>
+  );
+}
+
+// ─── Rollup verdict (existing flow) ───────────────────────────────────────
+function RollupVerdict({ action, minitia, score, risks, onReset }: {
   action: Action; minitia: MinitiaWithMetrics; score: number; risks: Risk[]; onReset: () => void;
 }) {
   const critical = risks.filter(r => r.severity === "critical");
   const elevated = risks.filter(r => r.severity === "elevated");
 
-  // Verdict rules: any critical → block; any elevated → warn; else allow
   const verdict: "allow" | "warn" | "block" =
     critical.length > 0 ? "block" :
     elevated.length > 0 ? "warn" :
@@ -329,20 +410,158 @@ function Verdict({ action, minitia, score, risks, onReset }: {
   const meta = META[verdict];
   const { Icon } = meta;
 
-  const askPrompt = buildAskPrompt(action, minitia, verdict);
+  const askPrompt = buildAskPromptRollup(action, minitia, verdict);
   const askHref = `/ask?prompt=${encodeURIComponent(askPrompt)}`;
 
   return (
+    <VerdictShell
+      color={meta.color}
+      Icon={Icon}
+      label={meta.label}
+      headline={meta.headline}
+      subline={`${action.toUpperCase()} · ${minitia.prettyName ?? minitia.name} · pulse score ${score}/100`}
+      onReset={onReset}
+      askHref={askHref}
+      blocked={verdict === "block"}
+      askHeadline={verdict === "block" ? "Execution blocked" : "Execute via Ask Pulse"}
+      askSub={verdict === "block"
+        ? "Pulse will not pre-fill this action while the route is degraded."
+        : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
+    >
+      {risks.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {risks.map(r => <RiskRow key={r.id} risk={r} />)}
+        </div>
+      ) : (
+        <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
+          No risks of type <strong style={{ color: "#E0F0FF" }}>{action}</strong> currently apply to this rollup. The specific route is safe.
+        </div>
+      )}
+    </VerdictShell>
+  );
+}
+
+// ─── L1 verdict (stake/vote/bridge/send on L1) ────────────────────────────
+function L1Verdict({ action, health, chainId, onReset }: {
+  action: Action; health: L1Health; chainId: string; onReset: () => void;
+}) {
+  // L1 verdict rules:
+  //   score < 25 → block, < 50 → warn, else allow
+  //   vote with zero active proposals → info (not blocking, but honest)
+  const baseVerdict: "allow" | "warn" | "block" =
+    health.score < 25 ? "block" :
+    health.score < 50 ? "warn" :
+    "allow";
+
+  const voteNoProposals = action === "vote" && health.activeProposals === 0;
+
+  const META = {
+    allow: { color: "#00FF88", Icon: CheckCircle2, label: "ALLOW", headline: "L1 is healthy" },
+    warn:  { color: "#FFB800", Icon: ShieldAlert, label: "WARN",  headline: "L1 is degraded" },
+    block: { color: "#FF3366", Icon: AlertTriangle, label: "BLOCK", headline: "L1 is unhealthy — action blocked" },
+  } as const;
+  const meta = META[baseVerdict];
+  const { Icon } = meta;
+
+  const askPrompt = buildAskPromptL1(action, chainId, baseVerdict);
+  const askHref = `/ask?prompt=${encodeURIComponent(askPrompt)}`;
+
+  return (
+    <VerdictShell
+      color={meta.color}
+      Icon={Icon}
+      label={meta.label}
+      headline={meta.headline}
+      subline={`${action.toUpperCase()} · Initia L1 (${chainId}) · health ${health.score}/100`}
+      onReset={onReset}
+      askHref={askHref}
+      blocked={baseVerdict === "block"}
+      askHeadline={baseVerdict === "block" ? "Execution blocked" : "Execute via Ask Pulse"}
+      askSub={baseVerdict === "block"
+        ? "Pulse will not pre-fill this action while L1 is unhealthy."
+        : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
+    >
+      {/* L1 metrics strip */}
+      <div style={{
+        display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12,
+      }}>
+        <L1Metric label="Validators" value={String(health.validators)} color="#00D4FF" />
+        <L1Metric
+          label="Last block"
+          value={health.blockAgeSec >= 0 ? `${Math.round(health.blockAgeSec)}s ago` : "—"}
+          color={health.blockAgeSec < 60 ? "#00FF88" : health.blockAgeSec < 300 ? "#FFB800" : "#FF3366"}
+        />
+        <L1Metric
+          label="Active proposals"
+          value={String(health.activeProposals)}
+          color={health.activeProposals > 0 ? "#A78BFA" : "#5A7A8A"}
+        />
+      </div>
+
+      {health.issues.length > 0 ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {health.issues.map((issue, i) => (
+            <div key={i} style={{
+              padding: "9px 12px", borderRadius: 6,
+              border: `1px solid ${meta.color}20`,
+              background: `${meta.color}06`,
+              fontFamily: MONO, fontSize: 11, color: "#8AB4C8",
+            }}>
+              <AlertCircle style={{ width: 12, height: 12, color: meta.color, marginRight: 6, verticalAlign: -1 }} />
+              {issue}
+            </div>
+          ))}
+        </div>
+      ) : voteNoProposals ? (
+        <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
+          L1 is healthy, but there are <strong style={{ color: "#E0F0FF" }}>no active governance proposals</strong> to vote on right now. Check back when a proposal enters voting period.
+        </div>
+      ) : (
+        <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
+          Initia L1 is producing blocks, the validator set is healthy, and no risks apply to <strong style={{ color: "#E0F0FF" }}>{action}</strong> right now.
+        </div>
+      )}
+    </VerdictShell>
+  );
+}
+
+function L1Metric({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div style={{
+      padding: "10px 12px", borderRadius: 6,
+      border: "1px solid rgba(255,255,255,0.05)",
+      background: "rgba(10,18,24,0.5)",
+    }}>
+      <div style={{ fontFamily: MONO, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "#5A7A8A" }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: SANS, fontSize: 16, fontWeight: 700, color, marginTop: 3, lineHeight: 1.1 }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+// ─── Shared verdict shell ─────────────────────────────────────────────────
+function VerdictShell({
+  color, Icon, label, headline, subline, onReset, askHref, blocked, askHeadline, askSub, children,
+}: {
+  color: string;
+  Icon: typeof CheckCircle2;
+  label: string;
+  headline: string;
+  subline: string;
+  onReset: () => void;
+  askHref: string;
+  blocked: boolean;
+  askHeadline: string;
+  askSub: string;
+  children: React.ReactNode;
+}) {
+  return (
     <section style={{ marginBottom: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <span style={{
-          width: 22, height: 22, borderRadius: "50%",
-          border: `1px solid ${meta.color}55`, background: `${meta.color}12`,
-          color: meta.color, fontFamily: MONO, fontSize: 11, fontWeight: 700,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          3
-        </span>
+        <StepDot n={3} active />
         <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 700, color: "#E0F0FF" }}>
           Pulse verdict for this route
         </span>
@@ -357,66 +576,50 @@ function Verdict({ action, minitia, score, risks, onReset }: {
         </button>
       </div>
 
-      {/* Big verdict card */}
       <div style={{
         padding: 24, borderRadius: 10,
-        border: `1px solid ${meta.color}40`,
-        background: `linear-gradient(135deg, ${meta.color}10, rgba(4,10,15,0.6))`,
+        border: `1px solid ${color}40`,
+        background: `linear-gradient(135deg, ${color}10, rgba(4,10,15,0.6))`,
         marginBottom: 14,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
-          <Icon style={{ width: 40, height: 40, color: meta.color }} />
+          <Icon style={{ width: 40, height: 40, color }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: SANS, fontSize: 26, fontWeight: 800, color: meta.color, lineHeight: 1.1 }}>
-              {meta.headline}
+            <div style={{ fontFamily: SANS, fontSize: 26, fontWeight: 800, color, lineHeight: 1.1 }}>
+              {headline}
             </div>
             <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", marginTop: 5 }}>
-              {action.toUpperCase()} · {minitia.prettyName ?? minitia.name} · pulse score {score}/100
+              {subline}
             </div>
           </div>
           <span style={{
-            fontFamily: MONO, fontSize: 11, fontWeight: 700, color: meta.color,
+            fontFamily: MONO, fontSize: 11, fontWeight: 700, color,
             padding: "5px 12px", borderRadius: 4,
-            background: `${meta.color}15`, border: `1px solid ${meta.color}30`,
+            background: `${color}15`, border: `1px solid ${color}30`,
             letterSpacing: "0.1em",
           }}>
-            {meta.label}
+            {label}
           </span>
         </div>
-
-        {/* Risk list */}
-        {risks.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {risks.map(r => (
-              <RiskRow key={r.id} risk={r} />
-            ))}
-          </div>
-        ) : (
-          <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
-            No risks of type <strong style={{ color: "#E0F0FF" }}>{action}</strong> currently apply to this rollup. The specific route is safe.
-          </div>
-        )}
+        {children}
       </div>
 
-      {/* Action buttons */}
       <div style={{ display: "flex", gap: 10 }}>
         <Link href={askHref} style={{ flex: 1, textDecoration: "none" }}>
           <div style={{
             padding: "14px 18px", borderRadius: 8,
-            border: verdict === "block" ? "1px solid rgba(255,51,102,0.25)" : "1px solid rgba(0,255,136,0.25)",
-            background: verdict === "block" ? "rgba(255,51,102,0.05)" : "rgba(0,255,136,0.05)",
+            border: blocked ? "1px solid rgba(255,51,102,0.25)" : "1px solid rgba(0,255,136,0.25)",
+            background: blocked ? "rgba(255,51,102,0.05)" : "rgba(0,255,136,0.05)",
             display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-            opacity: verdict === "block" ? 0.5 : 1,
+            opacity: blocked ? 0.5 : 1,
           }}>
-            <Sparkles style={{ width: 16, height: 16, color: verdict === "block" ? "#FF3366" : "#00FF88" }} />
+            <Sparkles style={{ width: 16, height: 16, color: blocked ? "#FF3366" : "#00FF88" }} />
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
-                {verdict === "block" ? "Execution blocked" : "Execute via Ask Pulse"}
+                {askHeadline}
               </div>
               <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", marginTop: 2 }}>
-                {verdict === "block"
-                  ? "Pulse will not pre-fill this action while the route is degraded."
-                  : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
+                {askSub}
               </div>
             </div>
             <ArrowRight style={{ width: 14, height: 14, color: "#8AB4C8" }} />
@@ -453,7 +656,7 @@ function RiskRow({ risk }: { risk: Risk }) {
   );
 }
 
-function buildAskPrompt(action: Action, m: MinitiaWithMetrics, verdict: "allow" | "warn" | "block"): string {
+function buildAskPromptRollup(action: Action, m: MinitiaWithMetrics, verdict: "allow" | "warn" | "block"): string {
   const name = m.prettyName ?? m.name;
   if (verdict === "block") {
     return `Pulse just blocked a ${action} to ${name} (${m.chainId}). Explain which specific risks caused the block.`;
@@ -463,5 +666,17 @@ function buildAskPrompt(action: Action, m: MinitiaWithMetrics, verdict: "allow" 
     case "stake":  return `I want to stake on ${name} (${m.chainId}). The Pulse signal says ${verdict}. Which validator is safest right now?`;
     case "send":   return `I want to send tokens on ${name} (${m.chainId}). Confirm the chain is live and set up the transfer.`;
     case "vote":   return `Any active governance proposals on ${name} (${m.chainId}) I should vote on? Pulse says ${verdict}.`;
+  }
+}
+
+function buildAskPromptL1(action: Action, chainId: string, verdict: "allow" | "warn" | "block"): string {
+  if (verdict === "block") {
+    return `Pulse just blocked a ${action} on Initia L1 (${chainId}). Which L1 issue triggered it?`;
+  }
+  switch (action) {
+    case "stake":  return `I want to stake INIT on Initia L1 (${chainId}). Pulse says ${verdict}. Which validator is the safest pick right now?`;
+    case "vote":   return `Show me the active governance proposals on Initia L1 (${chainId}) and tell me which way the ecosystem is leaning.`;
+    case "bridge": return `I want to bridge to Initia L1 (${chainId}). Pulse says ${verdict}. What's the safest route in?`;
+    case "send":   return `I want to send tokens on Initia L1 (${chainId}). Confirm the chain is live and set up the transfer.`;
   }
 }
