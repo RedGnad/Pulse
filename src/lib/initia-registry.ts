@@ -43,21 +43,19 @@ const TESTNET_MINITIAS: { folder: string; prettyName: string }[] = [
   { folder: "wasm", prettyName: "Wasm" },
 ];
 
-// Mainnet minitias — greyed-out visual references only
+// Mainnet minitias — slugs confirmed live in initia-registry.
+// blackwing / noon / tucana / milkyway (slug) are 404s; MilkyWay is
+// published under the `moo` folder with pretty_name "MilkyWay".
 const MAINNET_MINITIAS: { folder: string; prettyName: string }[] = [
-  { folder: "blackwing", prettyName: "Blackwing" },
+  { folder: "cabal", prettyName: "Cabal" },
   { folder: "civitia", prettyName: "Civitia" },
   { folder: "echelon", prettyName: "Echelon" },
-  { folder: "embr", prettyName: "Embr" },
+  { folder: "embr", prettyName: "Embr.fun" },
   { folder: "inertia", prettyName: "Inertia" },
-  { folder: "milkyway", prettyName: "MilkyWay" },
-  { folder: "moo", prettyName: "Moo" },
-  { folder: "noon", prettyName: "Noon" },
-  { folder: "rave", prettyName: "Rave" },
-  { folder: "tucana", prettyName: "Tucana" },
-  { folder: "yominet", prettyName: "YomiNet" },
-  { folder: "cabal", prettyName: "Cabal" },
   { folder: "intergaze", prettyName: "Intergaze" },
+  { folder: "moo", prettyName: "MilkyWay" },
+  { folder: "rave", prettyName: "Rave" },
+  { folder: "yominet", prettyName: "Yominet" },
 ];
 
 async function fetchChainJson(
