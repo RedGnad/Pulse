@@ -144,18 +144,26 @@ function ActPageInner() {
           marginBottom: 16,
         }}>
           <Zap style={{ width: 12, height: 12 }} />
-          Signal → Explanation → Action
+          Action router · Initia
         </div>
         <h1 style={{
-          fontFamily: SANS, fontSize: 38, fontWeight: 800, color: "#E0F0FF",
-          margin: "0 0 12px", letterSpacing: "-0.02em", lineHeight: 1.1,
+          fontFamily: SANS, fontSize: 44, fontWeight: 800, color: "#E0F0FF",
+          margin: "0 0 14px", letterSpacing: "-0.03em", lineHeight: 1.05,
         }}>
-          What are you about to do?
+          Route any action to the{" "}
+          <span
+            className="pulse-gradient-text"
+            style={{
+              backgroundImage: "linear-gradient(90deg, #00FF88, #00D4FF, #A78BFA, #00FF88)",
+            }}
+          >
+            right Initia appchain.
+          </span>
         </h1>
-        <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: "0 0 18px", lineHeight: 1.6, maxWidth: 680 }}>
-          Pick an action, describe what you want in one line, and Pulse routes
-          you to the appchain whose on-chain profile actually supports it —
-          scored, explained, and gated on live risk.
+        <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: "0 0 20px", lineHeight: 1.6, maxWidth: 680 }}>
+          Tell Pulse what you want to do. It picks the minitia whose on-chain
+          profile actually supports it, explains why, and blocks the route if
+          live risk says it&apos;s unsafe.
         </p>
 
         {/* Free-text intent — optional, but this is where the routing
