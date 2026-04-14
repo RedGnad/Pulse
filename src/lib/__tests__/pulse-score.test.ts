@@ -7,8 +7,12 @@ function makeMinitia(overrides: Partial<MinitiaWithMetrics["metrics"]> & { chain
   return {
     chainId,
     name: "Test Minitia",
-    vmType: "evm",
+    prettyName: "Test Minitia",
+    status: "live",
+    networkType: "testnet",
+    apis: { rest: [], rpc: [], api: [] },
     metrics: {
+      chainId,
       blockHeight: 1000,
       totalTxCount: 500,
       activeValidators: 3,
@@ -20,17 +24,17 @@ function makeMinitia(overrides: Partial<MinitiaWithMetrics["metrics"]> & { chain
       totalSupply: [{ denom: "uinit", amount: "1000000" }],
       ...metricsOverrides,
     },
-  } as MinitiaWithMetrics;
+  };
 }
 
 function makeIbcChannel(sourceChainId: string, destChainId: string): IbcChannel {
   return {
-    channelId: "channel-0",
-    portId: "transfer",
     sourceChainId,
     destChainId,
-    state: "STATE_OPEN",
-  } as IbcChannel;
+    portId: "transfer",
+    channelId: "channel-0",
+    version: "ics20-1",
+  };
 }
 
 describe("computePulseScore", () => {

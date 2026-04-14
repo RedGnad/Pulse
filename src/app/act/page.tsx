@@ -20,6 +20,17 @@ import { MinitiaWithMetrics } from "@/lib/types";
 const MONO = "var(--font-jetbrains), monospace";
 const SANS = "var(--font-chakra), sans-serif";
 
+// Canonical demo queries — one per differentiator we actually verified
+// against the live mainnet registry profiles. These are the queries that
+// produce non-trivial routing decisions (see scripts/intent-sanity.mts).
+const FEATURED_INTENTS: { action: Action; text: string }[] = [
+  { action: "trade", text: "borrow USDC" },
+  { action: "trade", text: "trade ETH perps with leverage" },
+  { action: "trade", text: "delta neutral vault for INIT" },
+  { action: "mint",  text: "mint NFTs on Initia" },
+  { action: "stake", text: "stake 10 INIT" },
+];
+
 const ACTIONS: { id: Action; label: string; Icon: typeof Zap; desc: string }[] = [
   { id: "bridge", label: "Bridge", Icon: ArrowLeftRight, desc: "Move assets between rollups or L1" },
   { id: "trade",  label: "Trade",  Icon: TrendingUp,     desc: "Swap, perps, lend on a DeFi rollup" },
@@ -215,6 +226,54 @@ function ActPageInner() {
             </button>
           )}
         </div>
+
+        {/* Featured intents — the canonical examples used in the demo.
+            Each chip sets both the action AND the intent text so the user
+            (or a judge) can reproduce the golden path with one click. */}
+        {!intentText && (
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 6,
+            marginTop: 10, marginLeft: 2,
+          }}>
+            <span style={{
+              fontFamily: MONO, fontSize: 10,
+              color: "#5A7A8A", letterSpacing: "0.08em", textTransform: "uppercase",
+              alignSelf: "center", marginRight: 2,
+            }}>
+              try:
+            </span>
+            {FEATURED_INTENTS.map(f => (
+              <button
+                key={f.text}
+                onClick={() => {
+                  setAction(f.action);
+                  setIntentText(f.text);
+                  setTarget(null);
+                }}
+                style={{
+                  fontFamily: MONO, fontSize: 10,
+                  color: "#8AB4C8",
+                  padding: "4px 9px",
+                  borderRadius: 3,
+                  background: "rgba(0,212,255,0.04)",
+                  border: "1px solid rgba(0,212,255,0.14)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = "rgba(0,212,255,0.08)";
+                  e.currentTarget.style.color = "#E0F0FF";
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = "rgba(0,212,255,0.04)";
+                  e.currentTarget.style.color = "#8AB4C8";
+                }}
+              >
+                {f.text}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Parsed intent chip row — shows the user exactly what Pulse is
             matching against. Transparent about the scorer's inputs. */}
