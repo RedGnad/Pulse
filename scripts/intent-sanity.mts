@@ -1,3 +1,6 @@
+// Run with: node --experimental-strip-types scripts/intent-sanity.mts
+// This file is excluded from tsc in tsconfig.json because node's
+// strip-types loader requires the explicit .ts extensions that tsc rejects.
 import { parseIntent, scoreIntentMatch } from "../src/lib/action-routing.ts";
 import type { MinitiaWithMetrics } from "../src/lib/types.ts";
 

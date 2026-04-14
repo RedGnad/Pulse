@@ -13,7 +13,7 @@ import { deriveRisks, risksForAction, Risk } from "@/lib/risks";
 import { computePulseScore, scoreColor, scoreLabel } from "@/lib/pulse-score";
 import { computeL1Health, L1Health } from "@/lib/l1-health";
 import {
-  Action, Target, L1_ONLY_ACTIONS, buildTargets,
+  Action, Target, L1_ONLY_ACTIONS, buildTargets, parseIntent,
 } from "@/lib/action-routing";
 import { MinitiaWithMetrics } from "@/lib/types";
 
@@ -67,14 +67,27 @@ function ActPageInner() {
 
   const [action, setAction] = useState<Action | null>((sp.get("action") as Action) ?? null);
   const [target, setTarget] = useState<string | null>(sp.get("target"));
+  const [intentText, setIntentText] = useState<string>(sp.get("intent") ?? "");
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (action) params.set("action", action);
     if (target) params.set("target", target);
+    if (intentText.trim()) params.set("intent", intentText.trim());
     const qs = params.toString();
     router.replace(qs ? `/act?${qs}` : "/act", { scroll: false });
-  }, [action, target, router]);
+  }, [action, target, intentText, router]);
+
+  // Parse the free-text intent whenever it or the action changes. Memoised so
+  // buildTargets doesn't re-score on every keystroke re-render.
+  const parsedIntent = useMemo(() => {
+    if (!action || !intentText.trim()) return null;
+    const p = parseIntent(intentText, action);
+    // If nothing got extracted, treat as "no intent" — falls back to pure
+    // live-health sort, which is the honest default.
+    if (!p.verbs.length && !p.assets.length && !p.modifiers.length) return null;
+    return p;
+  }, [action, intentText]);
 
   // Score every rollup once (including mainnet app-chains shown as refs, so
   // users can pick them for Trade/Play/Mint actions).
@@ -93,8 +106,8 @@ function ActPageInner() {
 
   const targets = useMemo(() => {
     if (!eco || !l1Health) return [];
-    return buildTargets(action, eco, l1Health, scoredRollups);
-  }, [action, eco, l1Health, scoredRollups]);
+    return buildTargets(action, eco, l1Health, scoredRollups, parsedIntent);
+  }, [action, eco, l1Health, scoredRollups, parsedIntent]);
 
   const selectedTarget = target ? targets.find(t => t.chainId === target) ?? null : null;
   const allRisks = useMemo(() => (eco ? deriveRisks(eco) : []), [eco]);
@@ -139,10 +152,102 @@ function ActPageInner() {
         }}>
           What are you about to do?
         </h1>
-        <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: 0, lineHeight: 1.6, maxWidth: 680 }}>
-          Pulse checks the specific route before you act. Pick an action, pick a target,
-          and Pulse tells you if that specific rollup is safe for that specific thing.
+        <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: "0 0 18px", lineHeight: 1.6, maxWidth: 680 }}>
+          Pick an action, describe what you want in one line, and Pulse routes
+          you to the appchain whose on-chain profile actually supports it —
+          scored, explained, and gated on live risk.
         </p>
+
+        {/* Free-text intent — optional, but this is where the routing
+            becomes non-trivial. Parsed into verbs/assets/modifiers and
+            matched against the initia-registry profile of each candidate. */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "11px 14px",
+          borderRadius: 8,
+          border: `1px solid ${parsedIntent ? "rgba(0,255,136,0.35)" : "rgba(0,212,255,0.18)"}`,
+          background: parsedIntent ? "rgba(0,255,136,0.04)" : "rgba(0,212,255,0.03)",
+          transition: "all 0.2s",
+        }}>
+          <Sparkles style={{
+            width: 14, height: 14,
+            color: parsedIntent ? "#00FF88" : "#00D4FF",
+            flexShrink: 0,
+          }} />
+          <input
+            type="text"
+            value={intentText}
+            onChange={e => setIntentText(e.target.value)}
+            placeholder={
+              action === "trade" ? "e.g. borrow USDC · trade ETH perps with leverage · liquid stake INIT" :
+              action === "play"  ? "e.g. mint cities · virtual world game · onchain Kamigotchi" :
+              action === "mint"  ? "e.g. mint NFT on Intergaze launchpad" :
+              action === "stake" ? "e.g. stake 10 INIT with the most reliable validator" :
+              "describe what you want to do on Initia"
+            }
+            style={{
+              flex: 1, minWidth: 0,
+              background: "transparent",
+              border: "none", outline: "none",
+              fontFamily: MONO, fontSize: 12,
+              color: "#E0F0FF",
+              letterSpacing: "0.01em",
+            }}
+          />
+          {intentText && (
+            <button
+              onClick={() => setIntentText("")}
+              style={{
+                fontFamily: MONO, fontSize: 10, color: "#5A7A8A",
+                background: "transparent", border: "none", cursor: "pointer",
+                padding: "2px 6px",
+              }}
+            >
+              clear
+            </button>
+          )}
+        </div>
+
+        {/* Parsed intent chip row — shows the user exactly what Pulse is
+            matching against. Transparent about the scorer's inputs. */}
+        {parsedIntent && (
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 6,
+            marginTop: 8, marginLeft: 2,
+            fontFamily: MONO, fontSize: 10,
+          }}>
+            <span style={{ color: "#5A7A8A", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+              parsed:
+            </span>
+            {parsedIntent.verbs.map(v => (
+              <span key={`v-${v}`} style={{
+                color: "#00FF88",
+                padding: "2px 6px",
+                background: "rgba(0,255,136,0.06)",
+                border: "1px solid rgba(0,255,136,0.18)",
+                borderRadius: 3,
+              }}>{v}</span>
+            ))}
+            {parsedIntent.assets.map(a => (
+              <span key={`a-${a}`} style={{
+                color: "#00D4FF",
+                padding: "2px 6px",
+                background: "rgba(0,212,255,0.06)",
+                border: "1px solid rgba(0,212,255,0.18)",
+                borderRadius: 3,
+              }}>{a.toUpperCase()}</span>
+            ))}
+            {parsedIntent.modifiers.map(m => (
+              <span key={`m-${m}`} style={{
+                color: "#A78BFA",
+                padding: "2px 6px",
+                background: "rgba(167,139,250,0.06)",
+                border: "1px solid rgba(167,139,250,0.18)",
+                borderRadius: 3,
+              }}>{m}</span>
+            ))}
+          </div>
+        )}
       </section>
 
       <section style={{
@@ -296,6 +401,41 @@ function ActPageInner() {
                         marginTop: 4, lineHeight: 1.5,
                       }}>
                         {t.description}
+                      </div>
+                    )}
+                    {t.reasoning && t.reasoning.facts.length > 0 && (
+                      <div style={{
+                        display: "flex", flexWrap: "wrap", gap: 5,
+                        marginTop: 6,
+                      }}>
+                        {t.reasoning.facts
+                          .filter(f => f.kind !== "info")
+                          .slice(0, 5)
+                          .map((f, i) => (
+                          <span key={i} style={{
+                            fontFamily: MONO, fontSize: 9,
+                            color: f.kind === "pass" ? "#00FF88" : "#FF3366",
+                            padding: "1px 5px",
+                            borderRadius: 2,
+                            background: f.kind === "pass" ? "rgba(0,255,136,0.06)" : "rgba(255,51,102,0.06)",
+                            border: `1px solid ${f.kind === "pass" ? "rgba(0,255,136,0.18)" : "rgba(255,51,102,0.18)"}`,
+                          }}>
+                            {f.kind === "pass" ? "✓" : "✗"} {f.label}
+                          </span>
+                        ))}
+                        {t.reasoning.intentMatch > 0 && (
+                          <span style={{
+                            fontFamily: MONO, fontSize: 9, fontWeight: 700,
+                            color: "#A78BFA",
+                            marginLeft: "auto",
+                            padding: "1px 5px",
+                            borderRadius: 2,
+                            background: "rgba(167,139,250,0.06)",
+                            border: "1px solid rgba(167,139,250,0.18)",
+                          }}>
+                            intent {t.reasoning.intentMatch}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
