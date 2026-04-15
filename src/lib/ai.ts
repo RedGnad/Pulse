@@ -734,7 +734,7 @@ RESPONSE BEHAVIOR:
       system: SYSTEM_PROMPT + `
 You are Pulse AI, the chat assistant for Initia Pulse.
 ${fullMode ? fullRules : widgetRules}
-- If asked what the app does: "Initia Pulse monitors 13+ rollups in real-time, writes AI analysis on-chain via PulseOracle, and helps you deploy, stake, or bridge with live intelligence."
+- If asked what the app does: "Initia Pulse is an action router for Initia's appchains — tell it what you want to do (borrow, trade, mint, stake) and it picks the minitia whose on-chain profile supports the action, with a live-health guardrail on top. /proof shows the oracle evidence, /ask executes the transaction."
 - Ground every answer in the live ecosystem data provided. Be specific with numbers.`,
       maxTokens: fullMode ? 500 : 250,
       messages: chatMessages,

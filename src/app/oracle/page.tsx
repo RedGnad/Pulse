@@ -1007,9 +1007,9 @@ export default function OraclePage() {
               lineHeight: 1.6,
             }}
           >
-            On-chain intelligence layer running on our own EVM rollup. The AI
-            monitors 13+ rollups and writes a live ecosystem snapshot every 5
-            minutes — composable, immutable, readable by any smart contract.{" "}
+            Supporting evidence for the router. PulseOracle publishes a live
+            ecosystem snapshot on its own MiniEVM rollup every 5 minutes —
+            composable, immutable, readable by any smart contract.{" "}
             <SnapshotCountdown
               latestTimestamp={
                 data?.latest ? Number(data.latest.timestamp) : null
