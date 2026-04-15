@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Zap, Coins, ArrowLeftRight, Send, Vote, Gamepad2, Palette, TrendingUp,
   CheckCircle2, ShieldAlert, AlertTriangle, AlertCircle,
-  ArrowRight, Loader2, Sparkles, Info,
+  ArrowRight, Loader2, Sparkles, Info, ExternalLink,
 } from "lucide-react";
 import { useEcosystem } from "@/hooks/use-ecosystem";
 import { deriveRisks, risksForAction, Risk } from "@/lib/risks";
@@ -79,6 +79,7 @@ function ActPageInner() {
   const [action, setAction] = useState<Action | null>((sp.get("action") as Action) ?? null);
   const [target, setTarget] = useState<string | null>(sp.get("target"));
   const [intentText, setIntentText] = useState<string>(sp.get("intent") ?? "");
+  const verdictRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -123,12 +124,30 @@ function ActPageInner() {
   const selectedTarget = target ? targets.find(t => t.chainId === target) ?? null : null;
   const allRisks = useMemo(() => (eco ? deriveRisks(eco) : []), [eco]);
 
-  // If the current target becomes invalid for the new action, clear it.
+  // When the user picks (or changes) a target, bring the verdict into view so
+  // they don't have to scroll past the long candidate list to find the CTA.
   useEffect(() => {
-    if (!action || !target) return;
+    if (!selectedTarget) return;
+    const node = verdictRef.current;
+    if (!node) return;
+    // Defer one frame so the verdict has actually rendered before we scroll.
+    const id = requestAnimationFrame(() => {
+      node.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [selectedTarget]);
+
+  // If the current target becomes invalid for the new action, clear it.
+  // Guard against the first-paint race where network context is still
+  // hydrating from localStorage: during that window `targets` can be empty
+  // or scoped to the wrong network, which would wrongly nuke a URL-supplied
+  // target. We only run the check once the ecosystem hook has resolved AND
+  // we actually have targets to compare against.
+  useEffect(() => {
+    if (!action || !target || !eco || targets.length === 0) return;
     const stillValid = targets.some(t => t.chainId === target);
     if (!stillValid) setTarget(null);
-  }, [action, target, targets]);
+  }, [action, target, targets, eco]);
 
   if (isLoading || !eco) {
     return (
@@ -391,7 +410,7 @@ function ActPageInner() {
             )}
             {action && !l1OnlyAction && (
               <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", marginLeft: "auto" }}>
-                sorted by pulse score
+                {selectedTarget ? "sorted by pulse score" : "pick one → verdict below"}
               </span>
             )}
           </div>
@@ -545,22 +564,24 @@ function ActPageInner() {
       )}
 
       {action && selectedTarget && (
-        selectedTarget.kind === "rollup" ? (
-          <RollupVerdict
-            action={action}
-            minitia={selectedTarget.minitia}
-            score={selectedTarget.score}
-            risks={risksForAction(allRisks, risksActionKey(action), selectedTarget.chainId)}
-            onReset={() => { setAction(null); setTarget(null); }}
-          />
-        ) : (
-          <L1Verdict
-            action={action}
-            health={selectedTarget.health}
-            chainId={selectedTarget.chainId}
-            onReset={() => { setAction(null); setTarget(null); }}
-          />
-        )
+        <div ref={verdictRef} style={{ scrollMarginTop: 80 }}>
+          {selectedTarget.kind === "rollup" ? (
+            <RollupVerdict
+              action={action}
+              minitia={selectedTarget.minitia}
+              score={selectedTarget.score}
+              risks={risksForAction(allRisks, risksActionKey(action), selectedTarget.chainId)}
+              onReset={() => { setAction(null); setTarget(null); }}
+            />
+          ) : (
+            <L1Verdict
+              action={action}
+              health={selectedTarget.health}
+              chainId={selectedTarget.chainId}
+              onReset={() => { setAction(null); setTarget(null); }}
+            />
+          )}
+        </div>
       )}
     </div>
   );
@@ -642,20 +663,33 @@ function RollupVerdict({ action, minitia, score, risks, onReset }: {
   const askHref = `/ask?prompt=${encodeURIComponent(askPrompt)}`;
   const category = minitia.profile?.category;
 
+  // Trade / play / mint can't be auto-signed by Ask Pulse — those happen inside
+  // the rollup's own app. If the profile gives us a website, surface it as the
+  // primary "Execute" action and keep Ask Pulse as a secondary question box.
+  const website = minitia.profile?.website;
+  const isRollupOnlyExecution = action === "trade" || action === "play" || action === "mint";
+  const externalHref = isRollupOnlyExecution && website && verdict !== "block" ? website : undefined;
+  const appName = minitia.prettyName ?? minitia.name;
+
   return (
     <VerdictShell
       color={meta.color}
       Icon={Icon}
       label={meta.label}
       headline={meta.headline}
-      subline={`${action.toUpperCase()} · ${minitia.prettyName ?? minitia.name}${category ? ` · ${category}` : ""} · pulse score ${score}/100`}
+      subline={`${action.toUpperCase()} · ${appName}${category ? ` · ${category}` : ""} · pulse score ${score}/100`}
       onReset={onReset}
       askHref={askHref}
       blocked={verdict === "block"}
-      askHeadline={verdict === "block" ? "Execution blocked" : "Execute via Ask Pulse"}
+      askHeadline={verdict === "block" ? "Execution blocked" : externalHref ? "Ask Pulse about this rollup" : "Execute via Ask Pulse"}
       askSub={verdict === "block"
         ? "Pulse will not pre-fill this action while the route is degraded."
+        : externalHref
+        ? "Open the chat with a verdict-aware prompt."
         : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
+      externalHref={externalHref}
+      externalHeadline={externalHref ? `Open ${appName} →` : undefined}
+      externalSub={externalHref ? `Launches ${new URL(externalHref).hostname} in a new tab. Pulse has cleared the route.` : undefined}
     >
       {minitia.profile?.description && (
         <div style={{
@@ -777,7 +811,10 @@ function L1Metric({ label, value, color }: { label: string; value: string; color
 }
 
 function VerdictShell({
-  color, Icon, label, headline, subline, onReset, askHref, blocked, askHeadline, askSub, children,
+  color, Icon, label, headline, subline, onReset,
+  askHref, blocked, askHeadline, askSub,
+  externalHref, externalHeadline, externalSub,
+  children,
 }: {
   color: string;
   Icon: typeof CheckCircle2;
@@ -789,8 +826,12 @@ function VerdictShell({
   blocked: boolean;
   askHeadline: string;
   askSub: string;
+  externalHref?: string;
+  externalHeadline?: string;
+  externalSub?: string;
   children: React.ReactNode;
 }) {
+  const hasExternal = !!externalHref && !blocked;
   return (
     <section style={{ marginBottom: 24 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
@@ -837,16 +878,54 @@ function VerdictShell({
         {children}
       </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
-        <Link href={askHref} style={{ flex: 1, textDecoration: "none" }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {hasExternal && (
+          <a
+            href={externalHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ flex: "1 1 260px", textDecoration: "none" }}
+          >
+            <div style={{
+              padding: "14px 18px", borderRadius: 8,
+              border: `1px solid ${color}55`,
+              background: `linear-gradient(135deg, ${color}18, ${color}06)`,
+              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
+              boxShadow: `0 0 24px ${color}15`,
+            }}>
+              <ExternalLink style={{ width: 16, height: 16, color }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
+                  {externalHeadline}
+                </div>
+                <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", marginTop: 2 }}>
+                  {externalSub}
+                </div>
+              </div>
+              <ArrowRight style={{ width: 14, height: 14, color }} />
+            </div>
+          </a>
+        )}
+        <Link href={askHref} style={{ flex: "1 1 260px", textDecoration: "none" }}>
           <div style={{
             padding: "14px 18px", borderRadius: 8,
-            border: blocked ? "1px solid rgba(255,51,102,0.25)" : "1px solid rgba(0,255,136,0.25)",
-            background: blocked ? "rgba(255,51,102,0.05)" : "rgba(0,255,136,0.05)",
+            border: blocked
+              ? "1px solid rgba(255,51,102,0.25)"
+              : hasExternal
+              ? "1px solid rgba(255,255,255,0.08)"
+              : "1px solid rgba(0,255,136,0.25)",
+            background: blocked
+              ? "rgba(255,51,102,0.05)"
+              : hasExternal
+              ? "rgba(10,18,24,0.6)"
+              : "rgba(0,255,136,0.05)",
             display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
             opacity: blocked ? 0.5 : 1,
           }}>
-            <Sparkles style={{ width: 16, height: 16, color: blocked ? "#FF3366" : "#00FF88" }} />
+            <Sparkles style={{
+              width: 16, height: 16,
+              color: blocked ? "#FF3366" : hasExternal ? "#8AB4C8" : "#00FF88",
+            }} />
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
                 {askHeadline}

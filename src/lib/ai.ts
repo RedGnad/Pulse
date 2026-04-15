@@ -254,6 +254,35 @@ function buildEcosystemContext(data: EcosystemOverview): string {
     .map((m) => m.prettyName)
     .join(", ");
 
+  // Authoritative app-chain profiles from initia-registry. These are the
+  // specialised rollups (DeFi perps, LST, Gaming, NFT) that users are looking
+  // for when they ask "where do I trade perps" or "show me games on Initia".
+  // We surface category, description, website, and the rollup's own "vip
+  // actions" so Pulse can answer with real URLs instead of guessing from
+  // training data.
+  const byCategory: Record<string, string[]> = {};
+  for (const m of data.minitias) {
+    const p = m.profile;
+    if (!p?.category) continue;
+    const lines: string[] = [];
+    lines.push(`- ${m.prettyName} (${m.chainId})`);
+    if (p.website) lines.push(`    website: ${p.website}`);
+    if (p.description) lines.push(`    about: ${p.description}`);
+    const vip = p.vipActions ?? [];
+    if (vip.length) {
+      lines.push(`    vip actions:`);
+      for (const a of vip.slice(0, 4)) {
+        lines.push(`      • ${a.title}: ${a.description}`);
+      }
+    }
+    (byCategory[p.category] ??= []).push(lines.join("\n"));
+  }
+  const categoryOrder = ["DeFi", "Gaming", "NFT"];
+  const profileBlock = categoryOrder
+    .filter((c) => byCategory[c]?.length)
+    .map((c) => `${c.toUpperCase()} ROLLUPS:\n${byCategory[c].join("\n")}`)
+    .join("\n\n");
+
   return `
 INITIA ECOSYSTEM SNAPSHOT — ${new Date(data.lastUpdated).toUTCString()}
 
@@ -275,9 +304,8 @@ INTERWOVEN BRIDGE:
 - ${transferChannels.length} active token transfer channels between L1 and minitias
 - ${data.ibcChannels.filter((c) => c.portId === "nft-transfer").length} NFT transfer channels
 
-MAINNET REFERENCE (read-only — these chains are on mainnet, not testnet):
-${data.minitias.filter((m) => m.isMainnetRef).map((m) => `- ${m.prettyName} (${m.chainId}) — mainnet, no live metrics available from testnet`).join("\n") || "none"}
-Note: Mainnet chains are listed for reference only. We can discuss deployment strategies for mainnet but cannot show live testnet metrics for them.
+APP-CHAIN PROFILES (authoritative from initia-registry — use these URLs verbatim, do not invent):
+${profileBlock || "(no profiled rollups in the current snapshot)"}
 `.trim();
 }
 
@@ -727,6 +755,7 @@ RESPONSE BEHAVIOR:
 - If they ask for deployment advice, rank the top 2-3 chains by Pulse Score and explain why each is suitable.
 - If they ask about staking, recommend specific validators with commission rates.
 - If they ask about bridging, give the specific route and mention the bridge button.
+- If they ask about games, DeFi apps, NFT mints, perps, lending, liquid staking, launchpads, or any specialised app-chain use case: answer by citing the matching entries from APP-CHAIN PROFILES. Always include the chain name, one-line description, and the \`website:\` URL exactly as given in the profile. Never invent URLs. If no profile matches, say so.
 - Always be actionable and specific, not just descriptive.`;
 
   try {

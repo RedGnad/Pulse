@@ -33,6 +33,11 @@ const CATEGORY_ACTIONS: Record<string, Action[]> = {
 // Actions that only make sense on Initia L1.
 export const L1_ONLY_ACTIONS: ReadonlySet<Action> = new Set(["stake", "vote"]);
 
+// Actions where L1 is a *valid* destination alongside rollups. Trade / play /
+// mint are rollup-only (L1 has no perps venue, no game, no NFT launchpad).
+// Bridge + send are category-agnostic and work on L1 too.
+const L1_VALID_ACTIONS: ReadonlySet<Action> = new Set(["bridge", "send", "stake", "vote"]);
+
 // Actions that apply to any live rollup regardless of category.
 const CATEGORY_AGNOSTIC: ReadonlySet<Action> = new Set(["bridge", "send"]);
 
@@ -290,17 +295,24 @@ export function buildTargets(
 ): Target[] {
   const out: Target[] = [];
 
-  out.push({
-    kind: "l1",
-    chainId: eco.l1.chainId,
-    name: "Initia L1",
-    score: l1Health.score,
-    color: l1Health.color,
-    label: l1Health.label,
-    category: "L1",
-    description: "Settlement layer. Staking, governance, and OPinit bridge anchoring.",
-    health: l1Health,
-  });
+  // L1 only appears when the action is something you can actually do on L1.
+  // For trade / play / mint, L1 is not a destination — don't mislead users by
+  // showing it as a top-ranked card.
+  const l1IsValid = !action || L1_VALID_ACTIONS.has(action);
+
+  if (l1IsValid) {
+    out.push({
+      kind: "l1",
+      chainId: eco.l1.chainId,
+      name: "Initia L1",
+      score: l1Health.score,
+      color: l1Health.color,
+      label: l1Health.label,
+      category: "L1",
+      description: "Settlement layer. Staking, governance, and OPinit bridge anchoring.",
+      health: l1Health,
+    });
+  }
 
   if (!action || L1_ONLY_ACTIONS.has(action)) return out;
 
