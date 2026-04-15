@@ -293,28 +293,27 @@ export function buildTargets(
   scoredRollups: ScoredRollup[],
   intent?: ParsedIntent | null,
 ): Target[] {
-  const out: Target[] = [];
-
   // L1 only appears when the action is something you can actually do on L1.
   // For trade / play / mint, L1 is not a destination — don't mislead users by
   // showing it as a top-ranked card.
   const l1IsValid = !action || L1_VALID_ACTIONS.has(action);
 
-  if (l1IsValid) {
-    out.push({
-      kind: "l1",
-      chainId: eco.l1.chainId,
-      name: "Initia L1",
-      score: l1Health.score,
-      color: l1Health.color,
-      label: l1Health.label,
-      category: "L1",
-      description: "Settlement layer. Staking, governance, and OPinit bridge anchoring.",
-      health: l1Health,
-    });
-  }
+  const l1Target: Extract<Target, { kind: "l1" }> | null = l1IsValid ? {
+    kind: "l1",
+    chainId: eco.l1.chainId,
+    name: "Initia L1",
+    score: l1Health.score,
+    color: l1Health.color,
+    label: l1Health.label,
+    category: "L1",
+    description: "Settlement layer. Staking, governance, and OPinit bridge anchoring.",
+    health: l1Health,
+  } : null;
 
-  if (!action || L1_ONLY_ACTIONS.has(action)) return out;
+  // For stake / vote, L1 is the *only* legit target — no rollup competes.
+  if (!action || L1_ONLY_ACTIONS.has(action)) {
+    return l1Target ? [l1Target] : [];
+  }
 
   const rollupTargets: (Extract<Target, { kind: "rollup" }>)[] = [];
 
@@ -353,11 +352,19 @@ export function buildTargets(
     });
   }
 
-  rollupTargets.sort((a, b) => {
-    const av = a.reasoning?.composite ?? a.score;
-    const bv = b.reasoning?.composite ?? b.score;
+  // Merge L1 into the same sort as rollups for bridge / send. L1 has no intent
+  // score (the intent vocab is rollup-specific: verbs like "borrow", assets
+  // like "USDC", modifiers like "perp" — none of those describe L1 as a
+  // destination), so its composite is just its raw health. If a rollup matches
+  // the intent well, it legitimately ranks above L1; if the user's intent is
+  // vague, the list collapses to pure health and L1 takes its honest place.
+  const all: Target[] = l1Target ? [l1Target, ...rollupTargets] : rollupTargets;
+
+  all.sort((a, b) => {
+    const av = a.kind === "rollup" ? (a.reasoning?.composite ?? a.score) : a.score;
+    const bv = b.kind === "rollup" ? (b.reasoning?.composite ?? b.score) : b.score;
     return bv - av;
   });
 
-  return [...out, ...rollupTargets];
+  return all;
 }
