@@ -162,6 +162,51 @@ function hasWord(hay: string, term: string): boolean {
   return new RegExp(`\\b${esc}\\b`, "i").test(hay);
 }
 
+// ─── Action inference ───────────────────────────────────────────────────────
+//
+// Instead of requiring a manual action selection, infer the most likely action
+// from the free-text intent. This lets the UI be a single search bar.
+
+// Verb groups → action. Order matters: first matching group wins.
+const VERB_ACTION_MAP: [string[], Action][] = [
+  [["borrow", "supply", "trade", "perp", "vault", "yield", "meme", "liquidstake"], "trade"],
+  [["play"], "play"],
+  [["mint"], "mint"],
+  [["stake"], "stake"],  // only fires when no DeFi verb overrode it
+];
+
+/**
+ * Infer the action from free-text. Uses verb extraction first, then falls
+ * back to literal action/category words. Returns null when the text is too
+ * vague — the caller should show all chains sorted by health.
+ */
+export function inferAction(text: string): Action | null {
+  if (!text.trim()) return null;
+
+  // 1. Extract verbs using the same vocab as parseIntent
+  const verbs: string[] = [];
+  for (const [canonical, forms] of Object.entries(VERB_VOCAB)) {
+    if (forms.some(f => hasWord(text, f))) verbs.push(canonical);
+  }
+
+  // 2. Map to action via priority groups
+  for (const [group, action] of VERB_ACTION_MAP) {
+    if (verbs.some(v => group.includes(v))) return action;
+  }
+
+  // 3. Literal action words (not in VERB_VOCAB)
+  if (hasWord(text, "bridge") || hasWord(text, "bridging")) return "bridge";
+  if (hasWord(text, "send") || hasWord(text, "transfer")) return "send";
+  if (hasWord(text, "vote") || hasWord(text, "governance") || hasWord(text, "proposal")) return "vote";
+
+  // 4. Category-word fallbacks ("I want to do DeFi", "show me NFTs")
+  if (hasWord(text, "defi") || hasWord(text, "trading")) return "trade";
+  if (hasWord(text, "gaming") || hasWord(text, "games")) return "play";
+  if (hasWord(text, "nft") || hasWord(text, "nfts")) return "mint";
+
+  return null;
+}
+
 /**
  * Parse a free-text intent into structured signals. Keyword-based — no LLM
  * call. Returns whatever it can find; callers should handle empty arrays

@@ -1,53 +1,47 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Zap, Coins, ArrowLeftRight, Send, Vote, Gamepad2, Palette, TrendingUp,
-  CheckCircle2, ShieldAlert, AlertTriangle, AlertCircle,
-  ArrowRight, Loader2, Sparkles, Info, ExternalLink,
+  Zap, CheckCircle2, ShieldAlert, AlertTriangle,
+  ArrowRight, Loader2, Sparkles, ExternalLink, Search,
 } from "lucide-react";
 import { useEcosystem } from "@/hooks/use-ecosystem";
 import { deriveRisks, risksForAction, Risk } from "@/lib/risks";
 import { computePulseScore, scoreColor, scoreLabel } from "@/lib/pulse-score";
 import { computeL1Health, L1Health } from "@/lib/l1-health";
 import {
-  Action, Target, L1_ONLY_ACTIONS, buildTargets, parseIntent,
+  Action, Target, L1_ONLY_ACTIONS, buildTargets, parseIntent, inferAction,
 } from "@/lib/action-routing";
 import { MinitiaWithMetrics } from "@/lib/types";
 
 const MONO = "var(--font-jetbrains), monospace";
 const SANS = "var(--font-chakra), sans-serif";
 
-// Canonical demo queries — one per differentiator we actually verified
-// against the live mainnet registry profiles. These are the queries that
-// produce non-trivial routing decisions (see scripts/intent-sanity.mts).
-const FEATURED_INTENTS: { action: Action; text: string }[] = [
-  { action: "trade", text: "borrow USDC" },
-  { action: "trade", text: "trade ETH perps with leverage" },
-  { action: "trade", text: "delta neutral vault for INIT" },
-  { action: "mint",  text: "mint NFTs on Initia" },
-  { action: "stake", text: "stake 10 INIT" },
+// Curated demo intents — each produces a non-trivial routing decision.
+const FEATURED_INTENTS = [
+  "borrow USDC",
+  "trade ETH perps with leverage",
+  "delta neutral vault for INIT",
+  "mint NFTs on Initia",
+  "play a game on Initia",
+  "stake INIT",
 ];
 
-const ACTIONS: { id: Action; label: string; Icon: typeof Zap; desc: string }[] = [
-  { id: "bridge", label: "Bridge", Icon: ArrowLeftRight, desc: "Move assets between rollups or L1" },
-  { id: "trade",  label: "Trade",  Icon: TrendingUp,     desc: "Swap, perps, lend on a DeFi rollup" },
-  { id: "play",   label: "Play",   Icon: Gamepad2,       desc: "Interact with a gaming rollup" },
-  { id: "mint",   label: "Mint",   Icon: Palette,        desc: "Mint or trade NFTs on a launchpad" },
-  { id: "send",   label: "Send",   Icon: Send,           desc: "Transfer to another address" },
-  { id: "stake",  label: "Stake",  Icon: Coins,          desc: "Delegate INIT to a validator (L1)" },
-  { id: "vote",   label: "Vote",   Icon: Vote,           desc: "Cast a governance vote (L1)" },
-];
+const ACTION_LABELS: Record<Action, string> = {
+  bridge: "Bridge",
+  trade: "DeFi",
+  play: "Gaming",
+  mint: "NFT",
+  send: "Send",
+  stake: "Staking",
+  vote: "Governance",
+};
 
-// Maps for the risksForAction filter (which only knows the legacy rollup
-// action vocabulary: bridge/stake/send/vote). Trade/Play/Mint on rollups
-// are all "touch the rollup's state machine", so they inherit bridge-class
-// risks (route degradation, stale data, no IBC path).
 function risksActionKey(action: Action): "bridge" | "stake" | "send" | "vote" {
   if (action === "stake" || action === "vote" || action === "send" || action === "bridge") return action;
-  return "bridge"; // trade, play, mint → treated like bridge for risk filtering
+  return "bridge";
 }
 
 export default function ActPage() {
@@ -70,43 +64,37 @@ function useIsNarrow(bp = 900): boolean {
   return narrow;
 }
 
+// ─── Main page ──────────────────────────────────────────────────────────────
+
 function ActPageInner() {
   const sp = useSearchParams();
   const router = useRouter();
   const { data: eco, isLoading } = useEcosystem();
   const isNarrow = useIsNarrow(900);
 
-  const [action, setAction] = useState<Action | null>((sp.get("action") as Action) ?? null);
-  const [target, setTarget] = useState<string | null>(sp.get("target"));
-  const [intentText, setIntentText] = useState<string>(sp.get("intent") ?? "");
-  const verdictRef = useRef<HTMLDivElement | null>(null);
+  const [intentText, setIntentText] = useState(sp.get("intent") ?? "");
 
+  // Sync intent to URL — lightweight, no other params needed
   useEffect(() => {
     const params = new URLSearchParams();
-    if (action) params.set("action", action);
-    if (target) params.set("target", target);
     if (intentText.trim()) params.set("intent", intentText.trim());
     const qs = params.toString();
-    router.replace(qs ? `/act?${qs}` : "/act", { scroll: false });
-  }, [action, target, intentText, router]);
+    router.replace(qs ? `/?${qs}` : "/", { scroll: false });
+  }, [intentText, router]);
 
-  // Parse the free-text intent whenever it or the action changes. Memoised so
-  // buildTargets doesn't re-score on every keystroke re-render.
+  const action = useMemo(() => inferAction(intentText), [intentText]);
+
   const parsedIntent = useMemo(() => {
     if (!action || !intentText.trim()) return null;
     const p = parseIntent(intentText, action);
-    // If nothing got extracted, treat as "no intent" — falls back to pure
-    // live-health sort, which is the honest default.
     if (!p.verbs.length && !p.assets.length && !p.modifiers.length) return null;
     return p;
   }, [action, intentText]);
 
-  // Score every rollup once (including mainnet app-chains shown as refs, so
-  // users can pick them for Trade/Play/Mint actions).
   const scoredRollups = useMemo(() => {
     if (!eco) return [];
-    const all = eco.minitias.filter(m => (m.metrics?.blockHeight ?? 0) > 0 || m.profile);
-    return all
+    return eco.minitias
+      .filter(m => (m.metrics?.blockHeight ?? 0) > 0 || m.profile)
       .map(m => {
         const total = computePulseScore(m, eco.minitias, eco.ibcChannels).total;
         return { minitia: m, score: total, color: scoreColor(total), label: scoreLabel(total) };
@@ -117,37 +105,11 @@ function ActPageInner() {
   const l1Health = useMemo(() => (eco ? computeL1Health(eco.l1) : null), [eco]);
 
   const targets = useMemo(() => {
-    if (!eco || !l1Health) return [];
+    if (!eco || !l1Health || !action) return [];
     return buildTargets(action, eco, l1Health, scoredRollups, parsedIntent);
   }, [action, eco, l1Health, scoredRollups, parsedIntent]);
 
-  const selectedTarget = target ? targets.find(t => t.chainId === target) ?? null : null;
   const allRisks = useMemo(() => (eco ? deriveRisks(eco) : []), [eco]);
-
-  // When the user picks (or changes) a target, bring the verdict into view so
-  // they don't have to scroll past the long candidate list to find the CTA.
-  useEffect(() => {
-    if (!selectedTarget) return;
-    const node = verdictRef.current;
-    if (!node) return;
-    // Defer one frame so the verdict has actually rendered before we scroll.
-    const id = requestAnimationFrame(() => {
-      node.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [selectedTarget]);
-
-  // If the current target becomes invalid for the new action, clear it.
-  // Guard against the first-paint race where network context is still
-  // hydrating from localStorage: during that window `targets` can be empty
-  // or scoped to the wrong network, which would wrongly nuke a URL-supplied
-  // target. We only run the check once the ecosystem hook has resolved AND
-  // we actually have targets to compare against.
-  useEffect(() => {
-    if (!action || !target || !eco || targets.length === 0) return;
-    const stillValid = targets.some(t => t.chainId === target);
-    if (!stillValid) setTarget(null);
-  }, [action, target, targets, eco]);
 
   if (isLoading || !eco) {
     return (
@@ -158,14 +120,20 @@ function ActPageInner() {
     );
   }
 
-  const l1OnlyAction = action && L1_ONLY_ACTIONS.has(action);
-  const rollupTargetCount = targets.filter(t => t.kind === "rollup").length;
-  const noRollupsForAction = !!action && !l1OnlyAction && rollupTargetCount === 0;
+  const hasResults = !!action && targets.length > 0;
+  const topTarget = hasResults ? targets[0] : null;
+  const otherTargets = hasResults ? targets.slice(1) : [];
+
+  // Ecosystem stats for the landing
+  const defiCount = scoredRollups.filter(r => r.minitia.profile?.category === "DeFi").length;
+  const gamingCount = scoredRollups.filter(r => r.minitia.profile?.category === "Gaming").length;
+  const nftCount = scoredRollups.filter(r => r.minitia.profile?.category === "NFT").length;
 
   return (
-    <div style={{ maxWidth: 920, margin: "0 auto", padding: "40px 28px 80px" }}>
+    <div style={{ maxWidth: 920, margin: "0 auto", padding: isNarrow ? "24px 16px 60px" : "40px 28px 80px" }}>
 
-      <section style={{ marginBottom: 32 }}>
+      {/* ── Hero ── */}
+      <section style={{ marginBottom: hasResults ? 36 : 0 }}>
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 6,
           fontFamily: MONO, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase",
@@ -174,71 +142,76 @@ function ActPageInner() {
           marginBottom: 16,
         }}>
           <Zap style={{ width: 12, height: 12 }} />
-          Action router · Initia
+          Intent Router
         </div>
+
         <h1 style={{
-          fontFamily: SANS, fontSize: 44, fontWeight: 800, color: "#E0F0FF",
-          margin: "0 0 14px", letterSpacing: "-0.03em", lineHeight: 1.05,
+          fontFamily: SANS, fontSize: isNarrow ? 30 : 44, fontWeight: 800, color: "#E0F0FF",
+          margin: "0 0 12px", letterSpacing: "-0.03em", lineHeight: 1.05,
         }}>
-          Route any action to the{" "}
-          <span
-            className="pulse-gradient-text"
-            style={{
-              backgroundImage: "linear-gradient(90deg, #00FF88, #00D4FF, #A78BFA, #00FF88)",
-            }}
-          >
-            right Initia appchain.
+          What do you want to do{" "}
+          <span className="pulse-gradient-text" style={{
+            backgroundImage: "linear-gradient(90deg, #00FF88, #00D4FF, #A78BFA, #00FF88)",
+          }}>
+            on Initia?
           </span>
         </h1>
-        <p style={{ fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: "0 0 20px", lineHeight: 1.6, maxWidth: 680 }}>
-          Tell Pulse what you want to do. It picks the minitia whose on-chain
-          profile actually supports it, explains why, and blocks the route if
-          live risk says it&apos;s unsafe.
+
+        <p style={{
+          fontFamily: MONO, fontSize: 13, color: "#8AB4C8", margin: "0 0 20px",
+          lineHeight: 1.6, maxWidth: 620,
+        }}>
+          Describe your intent — Pulse identifies the right appchain, checks
+          live risk, and routes you directly.
         </p>
 
-        {/* Free-text intent — optional, but this is where the routing
-            becomes non-trivial. Parsed into verbs/assets/modifiers and
-            matched against the initia-registry profile of each candidate. */}
+        {/* ── Search input ── */}
         <div style={{
           display: "flex", alignItems: "center", gap: 10,
-          padding: "11px 14px",
-          borderRadius: 8,
-          border: `1px solid ${parsedIntent ? "rgba(0,255,136,0.35)" : "rgba(0,212,255,0.18)"}`,
-          background: parsedIntent ? "rgba(0,255,136,0.04)" : "rgba(0,212,255,0.03)",
-          transition: "all 0.2s",
+          padding: "14px 16px",
+          borderRadius: 10,
+          border: `1px solid ${action ? "rgba(0,255,136,0.35)" : "rgba(0,212,255,0.18)"}`,
+          background: action ? "rgba(0,255,136,0.04)" : "rgba(0,212,255,0.03)",
+          transition: "all 0.25s",
+          boxShadow: action ? "0 0 30px rgba(0,255,136,0.06)" : "none",
         }}>
-          <Sparkles style={{
-            width: 14, height: 14,
-            color: parsedIntent ? "#00FF88" : "#00D4FF",
-            flexShrink: 0,
-          }} />
+          {action ? (
+            <Sparkles style={{ width: 16, height: 16, color: "#00FF88", flexShrink: 0 }} />
+          ) : (
+            <Search style={{ width: 16, height: 16, color: "#5A7A8A", flexShrink: 0 }} />
+          )}
           <input
             type="text"
             value={intentText}
             onChange={e => setIntentText(e.target.value)}
-            placeholder={
-              action === "trade" ? "e.g. borrow USDC · trade ETH perps with leverage · liquid stake INIT" :
-              action === "play"  ? "e.g. mint cities · virtual world game · onchain Kamigotchi" :
-              action === "mint"  ? "e.g. mint NFT on Intergaze launchpad" :
-              action === "stake" ? "e.g. stake 10 INIT with the most reliable validator" :
-              "describe what you want to do on Initia"
-            }
+            placeholder="borrow USDC · trade ETH perps · play a game · stake INIT…"
+            autoFocus
             style={{
               flex: 1, minWidth: 0,
               background: "transparent",
               border: "none", outline: "none",
-              fontFamily: MONO, fontSize: 12,
+              fontFamily: MONO, fontSize: 13,
               color: "#E0F0FF",
-              letterSpacing: "0.01em",
             }}
           />
+          {action && (
+            <span style={{
+              fontFamily: MONO, fontSize: 10, fontWeight: 700,
+              color: "#00FF88", letterSpacing: "0.08em",
+              padding: "3px 8px", borderRadius: 3,
+              background: "rgba(0,255,136,0.08)", border: "1px solid rgba(0,255,136,0.2)",
+              flexShrink: 0,
+            }}>
+              {ACTION_LABELS[action]}
+            </span>
+          )}
           {intentText && (
             <button
               onClick={() => setIntentText("")}
               style={{
                 fontFamily: MONO, fontSize: 10, color: "#5A7A8A",
                 background: "transparent", border: "none", cursor: "pointer",
-                padding: "2px 6px",
+                padding: "2px 6px", flexShrink: 0,
               }}
             >
               clear
@@ -246,13 +219,11 @@ function ActPageInner() {
           )}
         </div>
 
-        {/* Featured intents — the canonical examples used in the demo.
-            Each chip sets both the action AND the intent text so the user
-            (or a judge) can reproduce the golden path with one click. */}
+        {/* ── Demo chips ── */}
         {!intentText && (
           <div style={{
-            display: "flex", flexWrap: "wrap", gap: 6,
-            marginTop: 10, marginLeft: 2,
+            display: "flex", flexWrap: "wrap", gap: 8,
+            marginTop: 14,
           }}>
             <span style={{
               fontFamily: MONO, fontSize: 10,
@@ -261,363 +232,198 @@ function ActPageInner() {
             }}>
               try:
             </span>
-            {FEATURED_INTENTS.map(f => (
+            {FEATURED_INTENTS.map(text => (
               <button
-                key={f.text}
-                onClick={() => {
-                  setAction(f.action);
-                  setIntentText(f.text);
-                  setTarget(null);
-                }}
+                key={text}
+                onClick={() => setIntentText(text)}
                 style={{
-                  fontFamily: MONO, fontSize: 10,
+                  fontFamily: MONO, fontSize: 11,
                   color: "#8AB4C8",
-                  padding: "4px 9px",
-                  borderRadius: 3,
+                  padding: "6px 12px",
+                  borderRadius: 5,
                   background: "rgba(0,212,255,0.04)",
                   border: "1px solid rgba(0,212,255,0.14)",
                   cursor: "pointer",
                   transition: "all 0.15s",
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.background = "rgba(0,212,255,0.08)";
+                  e.currentTarget.style.background = "rgba(0,212,255,0.10)";
                   e.currentTarget.style.color = "#E0F0FF";
+                  e.currentTarget.style.borderColor = "rgba(0,212,255,0.30)";
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.background = "rgba(0,212,255,0.04)";
                   e.currentTarget.style.color = "#8AB4C8";
+                  e.currentTarget.style.borderColor = "rgba(0,212,255,0.14)";
                 }}
               >
-                {f.text}
+                {text}
               </button>
             ))}
           </div>
         )}
 
-        {/* Parsed intent chip row — shows the user exactly what Pulse is
-            matching against. Transparent about the scorer's inputs. */}
+        {/* ── Ecosystem stats (landing) ── */}
+        {!intentText && (
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 12, marginTop: 20,
+            fontFamily: MONO, fontSize: 11, color: "#5A7A8A",
+          }}>
+            {defiCount > 0 && <StatChip label="DeFi" count={defiCount} color="#00D4FF" />}
+            {gamingCount > 0 && <StatChip label="Gaming" count={gamingCount} color="#A78BFA" />}
+            {nftCount > 0 && <StatChip label="NFT" count={nftCount} color="#FFB800" />}
+            <span style={{ alignSelf: "center", color: "#3A5A6A" }}>
+              — ranked by live health, matched by intent
+            </span>
+          </div>
+        )}
+
+        {/* ── Parsed intent tokens ── */}
         {parsedIntent && (
           <div style={{
             display: "flex", flexWrap: "wrap", gap: 6,
-            marginTop: 8, marginLeft: 2,
-            fontFamily: MONO, fontSize: 10,
+            marginTop: 10, fontFamily: MONO, fontSize: 10,
           }}>
-            <span style={{ color: "#5A7A8A", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            <span style={{ color: "#5A7A8A", letterSpacing: "0.08em", textTransform: "uppercase", alignSelf: "center" }}>
               parsed:
             </span>
             {parsedIntent.verbs.map(v => (
               <span key={`v-${v}`} style={{
-                color: "#00FF88",
-                padding: "2px 6px",
-                background: "rgba(0,255,136,0.06)",
-                border: "1px solid rgba(0,255,136,0.18)",
-                borderRadius: 3,
+                color: "#00FF88", padding: "2px 7px", borderRadius: 3,
+                background: "rgba(0,255,136,0.06)", border: "1px solid rgba(0,255,136,0.18)",
               }}>{v}</span>
             ))}
             {parsedIntent.assets.map(a => (
               <span key={`a-${a}`} style={{
-                color: "#00D4FF",
-                padding: "2px 6px",
-                background: "rgba(0,212,255,0.06)",
-                border: "1px solid rgba(0,212,255,0.18)",
-                borderRadius: 3,
+                color: "#00D4FF", padding: "2px 7px", borderRadius: 3,
+                background: "rgba(0,212,255,0.06)", border: "1px solid rgba(0,212,255,0.18)",
               }}>{a.toUpperCase()}</span>
             ))}
             {parsedIntent.modifiers.map(m => (
               <span key={`m-${m}`} style={{
-                color: "#A78BFA",
-                padding: "2px 6px",
-                background: "rgba(167,139,250,0.06)",
-                border: "1px solid rgba(167,139,250,0.18)",
-                borderRadius: 3,
+                color: "#A78BFA", padding: "2px 7px", borderRadius: 3,
+                background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.18)",
               }}>{m}</span>
             ))}
           </div>
         )}
+
+        {/* ── Vague intent hint ── */}
+        {intentText.trim() && !action && (
+          <div style={{
+            marginTop: 14, padding: "10px 14px", borderRadius: 6,
+            border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.04)",
+            fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.5,
+          }}>
+            <Search style={{ width: 12, height: 12, color: "#00D4FF", verticalAlign: -2, marginRight: 6 }} />
+            Try a specific action — <em style={{ color: "#E0F0FF" }}>borrow</em>,{" "}
+            <em style={{ color: "#E0F0FF" }}>trade</em>,{" "}
+            <em style={{ color: "#E0F0FF" }}>stake</em>,{" "}
+            <em style={{ color: "#E0F0FF" }}>play</em>,{" "}
+            or <em style={{ color: "#E0F0FF" }}>mint</em>.
+          </div>
+        )}
       </section>
 
-      <section style={{
-        display: "grid",
-        gridTemplateColumns: isNarrow ? "1fr" : "260px 1fr",
-        gap: 16,
-        marginBottom: 24,
-      }}>
-        {/* Action column */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <StepDot n={1} active />
-            <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>Action</span>
-          </div>
+      {/* ── Results ── */}
+      {hasResults && action && (
+        <section>
           <div style={{
-            display: "grid",
-            gridTemplateColumns: isNarrow ? "repeat(4, 1fr)" : "1fr",
-            gap: 6,
+            display: "flex", alignItems: "center", gap: 10, marginBottom: 16,
           }}>
-            {ACTIONS.map(a => {
-              const isActive = action === a.id;
-              return (
-                <button
-                  key={a.id}
-                  onClick={() => setAction(a.id)}
-                  style={{
-                    padding: isNarrow ? "10px 6px" : "11px 13px",
-                    borderRadius: 7,
-                    border: isActive ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(255,255,255,0.05)",
-                    background: isActive ? "rgba(0,255,136,0.06)" : "rgba(10,18,24,0.5)",
-                    cursor: "pointer",
-                    display: "flex",
-                    flexDirection: isNarrow ? "column" : "row",
-                    alignItems: "center",
-                    gap: isNarrow ? 4 : 10,
-                    textAlign: isNarrow ? "center" : "left",
-                    transition: "all 0.15s",
-                  }}
-                >
-                  <a.Icon style={{ width: 14, height: 14, color: isActive ? "#00FF88" : "#8AB4C8", flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontFamily: SANS, fontSize: 12, fontWeight: 700,
-                      color: isActive ? "#E0F0FF" : "#8AB4C8",
-                    }}>
-                      {a.label}
-                    </div>
-                    {!isNarrow && (
-                      <div style={{ fontFamily: MONO, fontSize: 9, color: "#5A7A8A", lineHeight: 1.4 }}>
-                        {a.desc}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Target column */}
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-            <StepDot n={2} active={!!action} />
             <span style={{
-              fontFamily: SANS, fontSize: 13, fontWeight: 700,
-              color: action ? "#E0F0FF" : "#5A7A8A",
+              fontFamily: SANS, fontSize: 15, fontWeight: 700, color: "#E0F0FF",
             }}>
-              Target
+              {targets.length === 1 ? "1 match" : `${targets.length} matches`}
             </span>
-            {!action && (
-              <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", marginLeft: "auto" }}>
-                pick an action first
-              </span>
-            )}
-            {action && !l1OnlyAction && (
-              <span style={{ fontFamily: MONO, fontSize: 10, color: "#5A7A8A", marginLeft: "auto" }}>
-                {selectedTarget ? "sorted by pulse score" : "pick one → verdict below"}
-              </span>
-            )}
+            <span style={{
+              fontFamily: MONO, fontSize: 10, color: "#5A7A8A",
+              marginLeft: "auto",
+            }}>
+              ranked by intent match + live health
+            </span>
           </div>
 
-          {l1OnlyAction && (
-            <InfoBanner color="#00D4FF">
+          {/* L1-only info banner */}
+          {L1_ONLY_ACTIONS.has(action) && (
+            <div style={{
+              marginBottom: 12, padding: "10px 14px", borderRadius: 6,
+              border: "1px solid rgba(0,212,255,0.18)", background: "rgba(0,212,255,0.04)",
+              fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.5,
+            }}>
               <strong style={{ color: "#E0F0FF" }}>
                 {action === "stake" ? "Staking" : "Governance"} happens on Initia L1.
               </strong>{" "}
-              Minitias are OPinit rollups run by a single operator — they don&apos;t have
-              bonded validators or a gov module, so {action === "stake" ? "delegation" : "voting"} is only
-              meaningful on L1.
-            </InfoBanner>
+              Minitias are OPinit rollups with a single operator — no bonded validators, no gov module.
+            </div>
           )}
 
-          {noRollupsForAction && (
-            <InfoBanner color="#FFB800">
-              <strong style={{ color: "#E0F0FF" }}>No rollups in the current snapshot match this action.</strong>{" "}
-              This usually means you&apos;re on testnet (VM sandboxes only). Switch to mainnet
-              to see the real app-chains — Blackwing, Echelon, Rave for Trade; Civitia, Yominet for Play; Intergaze for Mint.
-            </InfoBanner>
+          {/* Top recommendation */}
+          {topTarget && (
+            <HeroCard
+              target={topTarget}
+              action={action}
+              risks={topTarget.kind === "rollup"
+                ? risksForAction(allRisks, risksActionKey(action), topTarget.chainId)
+                : []}
+              isNarrow={isNarrow}
+            />
           )}
 
-          <div style={{
-            display: "flex", flexDirection: "column", gap: 5,
-            opacity: action ? 1 : 0.4,
-            pointerEvents: action ? "auto" : "none",
-            transition: "opacity 0.2s",
-          }}>
-            {targets.map(t => {
-              const isActive = target === t.chainId;
-              return (
-                <button
-                  key={t.chainId}
-                  onClick={() => setTarget(t.chainId)}
-                  style={{
-                    padding: "12px 14px",
-                    borderRadius: 6,
-                    border: isActive ? `1px solid ${t.color}55` : "1px solid rgba(255,255,255,0.04)",
-                    background: isActive ? `${t.color}10` : "rgba(10,18,24,0.5)",
-                    cursor: "pointer",
-                    display: "flex", alignItems: "flex-start", gap: 11,
-                    textAlign: "left",
-                  }}
-                >
-                  <span style={{
-                    width: 8, height: 8, borderRadius: "50%", background: t.color,
-                    boxShadow: `0 0 8px ${t.color}`, flexShrink: 0, marginTop: 6,
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontFamily: SANS, fontSize: 13, fontWeight: 600, color: "#E0F0FF" }}>
-                        {t.name}
-                      </span>
-                      {t.category && (
-                        <CategoryBadge category={t.category} />
-                      )}
-                      <span style={{ fontFamily: MONO, fontSize: 9, color: "#5A7A8A" }}>
-                        {t.chainId}
-                      </span>
-                      <span style={{
-                        marginLeft: "auto",
-                        fontFamily: MONO, fontSize: 10, fontWeight: 700, color: t.color,
-                        padding: "3px 8px", borderRadius: 3,
-                        background: `${t.color}12`, border: `1px solid ${t.color}25`,
-                        letterSpacing: "0.05em",
-                      }}>
-                        {t.label} · {t.score}
-                      </span>
-                    </div>
-                    {t.description && (
-                      <div style={{
-                        fontFamily: MONO, fontSize: 10, color: "#8AB4C8",
-                        marginTop: 4, lineHeight: 1.5,
-                      }}>
-                        {t.description}
-                      </div>
-                    )}
-                    {t.reasoning && t.reasoning.facts.length > 0 && (
-                      <div style={{
-                        display: "flex", flexWrap: "wrap", gap: 5,
-                        marginTop: 6,
-                      }}>
-                        {t.reasoning.facts
-                          .filter(f => f.kind !== "info")
-                          .slice(0, 5)
-                          .map((f, i) => (
-                          <span key={i} style={{
-                            fontFamily: MONO, fontSize: 9,
-                            color: f.kind === "pass" ? "#00FF88" : "#FF3366",
-                            padding: "1px 5px",
-                            borderRadius: 2,
-                            background: f.kind === "pass" ? "rgba(0,255,136,0.06)" : "rgba(255,51,102,0.06)",
-                            border: `1px solid ${f.kind === "pass" ? "rgba(0,255,136,0.18)" : "rgba(255,51,102,0.18)"}`,
-                          }}>
-                            {f.kind === "pass" ? "✓" : "✗"} {f.label}
-                          </span>
-                        ))}
-                        {t.reasoning.intentMatch > 0 && (
-                          <span style={{
-                            fontFamily: MONO, fontSize: 9, fontWeight: 700,
-                            color: "#A78BFA",
-                            marginLeft: "auto",
-                            padding: "1px 5px",
-                            borderRadius: 2,
-                            background: "rgba(167,139,250,0.06)",
-                            border: "1px solid rgba(167,139,250,0.18)",
-                          }}>
-                            intent {t.reasoning.intentMatch}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      {action && target && !selectedTarget && (
-        <section style={{
-          padding: 16, marginBottom: 24,
-          borderRadius: 8,
-          border: "1px solid rgba(255,184,0,0.25)",
-          background: "rgba(255,184,0,0.05)",
-          display: "flex", alignItems: "flex-start", gap: 12,
-        }}>
-          <AlertCircle style={{ width: 18, height: 18, color: "#FFB800", flexShrink: 0, marginTop: 1 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF", marginBottom: 3 }}>
-              Target <code style={{ color: "#FFB800" }}>{target}</code> is not valid for this action
-            </div>
-            <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.6 }}>
-              Either the chain isn&apos;t in the registry, or the action isn&apos;t available on it. Pick a target from the list above.
-            </div>
-          </div>
-          <button
-            onClick={() => setTarget(null)}
-            style={{
-              fontFamily: MONO, fontSize: 11, color: "#FFB800",
-              background: "rgba(255,184,0,0.08)",
-              border: "1px solid rgba(255,184,0,0.25)",
-              borderRadius: 4, padding: "5px 10px", cursor: "pointer",
-            }}
-          >
-            clear
-          </button>
+          {/* Other results */}
+          {otherTargets.map((t, i) => (
+            <CompactCard
+              key={t.chainId}
+              target={t}
+              action={action}
+              risks={t.kind === "rollup"
+                ? risksForAction(allRisks, risksActionKey(action), t.chainId)
+                : []}
+              rank={i + 2}
+            />
+          ))}
         </section>
       )}
 
-      {action && selectedTarget && (
-        <div ref={verdictRef} style={{ scrollMarginTop: 80 }}>
-          {selectedTarget.kind === "rollup" ? (
-            <RollupVerdict
-              action={action}
-              minitia={selectedTarget.minitia}
-              score={selectedTarget.score}
-              risks={risksForAction(allRisks, risksActionKey(action), selectedTarget.chainId)}
-              onReset={() => { setAction(null); setTarget(null); }}
-            />
-          ) : (
-            <L1Verdict
-              action={action}
-              health={selectedTarget.health}
-              chainId={selectedTarget.chainId}
-              onReset={() => { setAction(null); setTarget(null); }}
-            />
-          )}
+      {/* No matches */}
+      {action && targets.length === 0 && (
+        <div style={{
+          marginTop: 16, padding: "14px 16px", borderRadius: 8,
+          border: "1px solid rgba(255,184,0,0.25)", background: "rgba(255,184,0,0.05)",
+          fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.6,
+        }}>
+          <strong style={{ color: "#E0F0FF" }}>No chains match this intent.</strong>{" "}
+          You may be on testnet. Switch to mainnet in the header to see live appchains.
         </div>
       )}
     </div>
   );
 }
 
-function StepDot({ n, active }: { n: number; active: boolean }) {
+// ─── Stat chip (landing) ────────────────────────────────────────────────────
+
+function StatChip({ label, count, color }: { label: string; count: number; color: string }) {
   return (
     <span style={{
-      width: 20, height: 20, borderRadius: "50%",
-      border: active ? "1px solid rgba(0,255,136,0.4)" : "1px solid rgba(90,122,138,0.3)",
-      background: active ? "rgba(0,255,136,0.08)" : "transparent",
-      color: active ? "#00FF88" : "#5A7A8A",
-      fontFamily: MONO, fontSize: 10, fontWeight: 700,
-      display: "flex", alignItems: "center", justifyContent: "center",
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "4px 10px", borderRadius: 4,
+      border: `1px solid ${color}25`, background: `${color}08`,
     }}>
-      {n}
+      <span style={{
+        width: 6, height: 6, borderRadius: "50%", background: color,
+        boxShadow: `0 0 6px ${color}`,
+      }} />
+      <span style={{ fontFamily: MONO, fontSize: 11, fontWeight: 700, color }}>
+        {count}
+      </span>
+      <span style={{ fontFamily: MONO, fontSize: 10, color: "#8AB4C8" }}>
+        {label}
+      </span>
     </span>
   );
 }
 
-function InfoBanner({ color, children }: { color: string; children: React.ReactNode }) {
-  return (
-    <div style={{
-      padding: "11px 14px", marginBottom: 8,
-      borderRadius: 6,
-      border: `1px solid ${color}38`,
-      background: `${color}0D`,
-      display: "flex", alignItems: "flex-start", gap: 10,
-    }}>
-      <Info style={{ width: 14, height: 14, color, flexShrink: 0, marginTop: 2 }} />
-      <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.55 }}>
-        {children}
-      </div>
-    </div>
-  );
-}
+// ─── Category badge ─────────────────────────────────────────────────────────
 
 function CategoryBadge({ category }: { category: string }) {
   const palette: Record<string, string> = {
@@ -639,158 +445,450 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
-// ─── Rollup verdict ───────────────────────────────────────────────────────
-function RollupVerdict({ action, minitia, score, risks, onReset }: {
-  action: Action; minitia: MinitiaWithMetrics; score: number; risks: Risk[]; onReset: () => void;
+// ─── Hero card (top recommendation) ─────────────────────────────────────────
+
+function HeroCard({ target, action, risks, isNarrow }: {
+  target: Target;
+  action: Action;
+  risks: Risk[];
+  isNarrow: boolean;
 }) {
-  const critical = risks.filter(r => r.severity === "critical");
-  const elevated = risks.filter(r => r.severity === "elevated");
+  const verdict = computeVerdict(target, risks);
+  const vm = VERDICT_META[verdict];
 
-  const verdict: "allow" | "warn" | "block" =
-    critical.length > 0 ? "block" :
-    elevated.length > 0 ? "warn" :
-    "allow";
+  const minitia = target.kind === "rollup" ? target.minitia : undefined;
+  const website = minitia?.profile?.website;
+  const isRollupExecution = action === "trade" || action === "play" || action === "mint";
+  const externalHref = isRollupExecution && website && verdict !== "block" ? website : undefined;
 
-  const META = {
-    allow: { color: "#00FF88", Icon: CheckCircle2, label: "ALLOW", headline: "Route is clear" },
-    warn:  { color: "#FFB800", Icon: ShieldAlert, label: "WARN",  headline: "Proceed with caution" },
-    block: { color: "#FF3366", Icon: AlertTriangle, label: "BLOCK", headline: "Route is degraded — action blocked" },
-  } as const;
-  const meta = META[verdict];
-  const { Icon } = meta;
-
-  const askPrompt = buildAskPromptRollup(action, minitia, verdict);
-  const askHref = `/ask?prompt=${encodeURIComponent(askPrompt)}`;
-  const category = minitia.profile?.category;
-
-  // Trade / play / mint can't be auto-signed by Ask Pulse — those happen inside
-  // the rollup's own app. If the profile gives us a website, surface it as the
-  // primary "Execute" action and keep Ask Pulse as a secondary question box.
-  const website = minitia.profile?.website;
-  const isRollupOnlyExecution = action === "trade" || action === "play" || action === "mint";
-  const externalHref = isRollupOnlyExecution && website && verdict !== "block" ? website : undefined;
-  const appName = minitia.prettyName ?? minitia.name;
+  const askHref = buildAskHref(target, action, verdict);
 
   return (
-    <VerdictShell
-      color={meta.color}
-      Icon={Icon}
-      label={meta.label}
-      headline={meta.headline}
-      subline={`${action.toUpperCase()} · ${appName}${category ? ` · ${category}` : ""} · pulse score ${score}/100`}
-      onReset={onReset}
-      askHref={askHref}
-      blocked={verdict === "block"}
-      askHeadline={verdict === "block" ? "Execution blocked" : externalHref ? "Ask Pulse about this rollup" : "Execute via Ask Pulse"}
-      askSub={verdict === "block"
-        ? "Pulse will not pre-fill this action while the route is degraded."
-        : externalHref
-        ? "Open the chat with a verdict-aware prompt."
-        : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
-      externalHref={externalHref}
-      externalHeadline={externalHref ? `Open ${appName} →` : undefined}
-      externalSub={externalHref ? `Launches ${new URL(externalHref).hostname} in a new tab. Pulse has cleared the route.` : undefined}
-    >
-      {minitia.profile?.description && (
+    <div style={{
+      marginBottom: 12,
+      borderRadius: 12,
+      border: `1px solid ${vm.color}35`,
+      background: `linear-gradient(135deg, ${vm.color}0C, rgba(4,10,15,0.6))`,
+      overflow: "hidden",
+    }}>
+      {/* Header */}
+      <div style={{ padding: isNarrow ? "16px 16px 12px" : "20px 24px 16px" }}>
+        {/* Top row: verdict + score */}
         <div style={{
-          fontFamily: MONO, fontSize: 11, color: "#8AB4C8",
-          lineHeight: 1.55, marginBottom: 14,
-          paddingBottom: 12, borderBottom: "1px solid rgba(255,255,255,0.05)",
+          display: "flex", alignItems: "center", gap: 8, marginBottom: 12,
         }}>
-          {minitia.profile.description}
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 4,
+            fontFamily: MONO, fontSize: 10, fontWeight: 700, color: vm.color,
+            padding: "3px 8px", borderRadius: 3,
+            background: `${vm.color}12`, border: `1px solid ${vm.color}30`,
+            letterSpacing: "0.06em",
+          }}>
+            <vm.Icon style={{ width: 11, height: 11 }} />
+            {vm.label}
+          </span>
+          <span style={{
+            fontFamily: MONO, fontSize: 10, color: "#5A7A8A",
+          }}>
+            #1 recommendation
+          </span>
+          <span style={{
+            marginLeft: "auto",
+            fontFamily: MONO, fontSize: 11, fontWeight: 700, color: target.color,
+            padding: "3px 8px", borderRadius: 3,
+            background: `${target.color}12`, border: `1px solid ${target.color}25`,
+          }}>
+            {target.label} · {target.score}
+          </span>
         </div>
-      )}
-      {risks.length > 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {risks.map(r => <RiskRow key={r.id} risk={r} />)}
+
+        {/* Name + category */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 6,
+          flexWrap: "wrap",
+        }}>
+          <span style={{
+            fontFamily: SANS, fontSize: isNarrow ? 22 : 26, fontWeight: 800,
+            color: "#E0F0FF", lineHeight: 1.1,
+          }}>
+            {target.name}
+          </span>
+          {target.category && <CategoryBadge category={target.category} />}
+          <span style={{ fontFamily: MONO, fontSize: 10, color: "#3A5A6A" }}>
+            {target.chainId}
+          </span>
         </div>
-      ) : (
-        <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
-          No risks affecting <strong style={{ color: "#E0F0FF" }}>{action}</strong> currently apply to this rollup. The specific route is safe.
+
+        {/* Description */}
+        {target.description && (
+          <div style={{
+            fontFamily: MONO, fontSize: 12, color: "#8AB4C8",
+            lineHeight: 1.5, marginBottom: 10, maxWidth: 600,
+          }}>
+            {target.description}
+          </div>
+        )}
+
+        {/* Reasoning badges */}
+        {target.reasoning && target.reasoning.facts.length > 0 && (
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 6,
+            alignItems: "center",
+          }}>
+            {target.reasoning.facts
+              .filter(f => f.kind !== "info")
+              .slice(0, 6)
+              .map((f, i) => (
+              <span key={i} style={{
+                fontFamily: MONO, fontSize: 9,
+                color: f.kind === "pass" ? "#00FF88" : "#FF3366",
+                padding: "2px 6px", borderRadius: 2,
+                background: f.kind === "pass" ? "rgba(0,255,136,0.06)" : "rgba(255,51,102,0.06)",
+                border: `1px solid ${f.kind === "pass" ? "rgba(0,255,136,0.18)" : "rgba(255,51,102,0.18)"}`,
+              }}>
+                {f.kind === "pass" ? "✓" : "✗"} {f.label}
+              </span>
+            ))}
+            {target.reasoning.intentMatch > 0 && (
+              <span style={{
+                fontFamily: MONO, fontSize: 9, fontWeight: 700, color: "#A78BFA",
+                padding: "2px 7px", borderRadius: 2,
+                background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.18)",
+                marginLeft: "auto",
+              }}>
+                intent match {target.reasoning.intentMatch}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Risk detail + L1 metrics */}
+      <div style={{
+        padding: isNarrow ? "0 16px 16px" : "0 24px 20px",
+        borderTop: "1px solid rgba(255,255,255,0.04)",
+        paddingTop: 14,
+      }}>
+        {/* L1 metrics */}
+        {target.kind === "l1" && (
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: isNarrow ? "1fr 1fr" : "repeat(3, 1fr)",
+            gap: 8, marginBottom: 12,
+          }}>
+            <L1Metric label="Validators" value={String(target.health.validators)} color="#00D4FF" />
+            <L1Metric
+              label="Last block"
+              value={target.health.blockAgeSec >= 0 ? `${Math.round(target.health.blockAgeSec)}s ago` : "—"}
+              color={target.health.blockAgeSec < 60 ? "#00FF88" : target.health.blockAgeSec < 300 ? "#FFB800" : "#FF3366"}
+            />
+            <L1Metric
+              label="Active proposals"
+              value={String(target.health.activeProposals)}
+              color={target.health.activeProposals > 0 ? "#A78BFA" : "#5A7A8A"}
+            />
+          </div>
+        )}
+
+        {/* Risks */}
+        {risks.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+            {risks.map(r => <RiskRow key={r.id} risk={r} />)}
+          </div>
+        ) : (
+          <div style={{
+            fontFamily: MONO, fontSize: 11, color: "#5A7A8A",
+            marginBottom: 14,
+          }}>
+            {target.kind === "l1" && action === "vote" && target.health.activeProposals === 0
+              ? "L1 is healthy but there are no active governance proposals right now."
+              : "No risks apply to this route."}
+          </div>
+        )}
+
+        {/* CTAs */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {externalHref && (
+            <a
+              href={externalHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ flex: "1 1 220px", textDecoration: "none" }}
+            >
+              <div style={{
+                padding: "13px 16px", borderRadius: 8,
+                border: `1px solid ${vm.color}50`,
+                background: `linear-gradient(135deg, ${vm.color}15, ${vm.color}06)`,
+                display: "flex", alignItems: "center", gap: 10,
+                cursor: "pointer",
+                boxShadow: `0 0 20px ${vm.color}12`,
+                transition: "box-shadow 0.2s",
+              }}>
+                <ExternalLink style={{ width: 15, height: 15, color: vm.color }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
+                    Open {target.name}
+                  </div>
+                  <div style={{ fontFamily: MONO, fontSize: 10, color: "#8AB4C8", marginTop: 1 }}>
+                    {new URL(externalHref).hostname}
+                  </div>
+                </div>
+                <ArrowRight style={{ width: 14, height: 14, color: vm.color }} />
+              </div>
+            </a>
+          )}
+          <Link href={askHref} style={{ flex: "1 1 220px", textDecoration: "none" }}>
+            <div style={{
+              padding: "13px 16px", borderRadius: 8,
+              border: verdict === "block"
+                ? "1px solid rgba(255,51,102,0.25)"
+                : externalHref
+                ? "1px solid rgba(255,255,255,0.08)"
+                : "1px solid rgba(0,255,136,0.25)",
+              background: verdict === "block"
+                ? "rgba(255,51,102,0.05)"
+                : externalHref
+                ? "rgba(10,18,24,0.6)"
+                : "rgba(0,255,136,0.05)",
+              display: "flex", alignItems: "center", gap: 10,
+              cursor: verdict === "block" ? "not-allowed" : "pointer",
+              opacity: verdict === "block" ? 0.5 : 1,
+            }}>
+              <Sparkles style={{
+                width: 15, height: 15,
+                color: verdict === "block" ? "#FF3366" : externalHref ? "#8AB4C8" : "#00FF88",
+              }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
+                  {verdict === "block" ? "Route blocked" : "Ask Pulse"}
+                </div>
+                <div style={{ fontFamily: MONO, fontSize: 10, color: "#8AB4C8", marginTop: 1 }}>
+                  {verdict === "block" ? "Risks must clear first" : "Detailed analysis + execution help"}
+                </div>
+              </div>
+              <ArrowRight style={{ width: 14, height: 14, color: "#8AB4C8" }} />
+            </div>
+          </Link>
         </div>
-      )}
-    </VerdictShell>
+      </div>
+    </div>
   );
 }
 
-// ─── L1 verdict ────────────────────────────────────────────────────────────
-function L1Verdict({ action, health, chainId, onReset }: {
-  action: Action; health: L1Health; chainId: string; onReset: () => void;
+// ─── Compact card (results 2+) ──────────────────────────────────────────────
+
+function CompactCard({ target, action, risks, rank }: {
+  target: Target;
+  action: Action;
+  risks: Risk[];
+  rank: number;
 }) {
-  const baseVerdict: "allow" | "warn" | "block" =
-    health.score < 25 ? "block" :
-    health.score < 50 ? "warn" :
-    "allow";
+  const [expanded, setExpanded] = useState(false);
 
-  const voteNoProposals = action === "vote" && health.activeProposals === 0;
+  const verdict = computeVerdict(target, risks);
+  const vm = VERDICT_META[verdict];
 
-  const META = {
-    allow: { color: "#00FF88", Icon: CheckCircle2, label: "ALLOW", headline: "L1 is healthy" },
-    warn:  { color: "#FFB800", Icon: ShieldAlert, label: "WARN",  headline: "L1 is degraded" },
-    block: { color: "#FF3366", Icon: AlertTriangle, label: "BLOCK", headline: "L1 is unhealthy — action blocked" },
-  } as const;
-  const meta = META[baseVerdict];
-  const { Icon } = meta;
+  const minitia = target.kind === "rollup" ? target.minitia : undefined;
+  const website = minitia?.profile?.website;
+  const isRollupExecution = action === "trade" || action === "play" || action === "mint";
+  const externalHref = isRollupExecution && website && verdict !== "block" ? website : undefined;
 
-  const askPrompt = buildAskPromptL1(action, chainId, baseVerdict);
-  const askHref = `/ask?prompt=${encodeURIComponent(askPrompt)}`;
+  const askHref = buildAskHref(target, action, verdict);
 
   return (
-    <VerdictShell
-      color={meta.color}
-      Icon={Icon}
-      label={meta.label}
-      headline={meta.headline}
-      subline={`${action.toUpperCase()} · Initia L1 (${chainId}) · health ${health.score}/100`}
-      onReset={onReset}
-      askHref={askHref}
-      blocked={baseVerdict === "block"}
-      askHeadline={baseVerdict === "block" ? "Execution blocked" : "Execute via Ask Pulse"}
-      askSub={baseVerdict === "block"
-        ? "Pulse will not pre-fill this action while L1 is unhealthy."
-        : "Opens the chat with a pre-filled prompt, guarded by this verdict."}
-    >
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 12,
-      }}>
-        <L1Metric label="Validators" value={String(health.validators)} color="#00D4FF" />
-        <L1Metric
-          label="Last block"
-          value={health.blockAgeSec >= 0 ? `${Math.round(health.blockAgeSec)}s ago` : "—"}
-          color={health.blockAgeSec < 60 ? "#00FF88" : health.blockAgeSec < 300 ? "#FFB800" : "#FF3366"}
-        />
-        <L1Metric
-          label="Active proposals"
-          value={String(health.activeProposals)}
-          color={health.activeProposals > 0 ? "#A78BFA" : "#5A7A8A"}
-        />
-      </div>
+    <div style={{
+      marginBottom: 8,
+      borderRadius: 10,
+      border: expanded ? `1px solid ${vm.color}25` : "1px solid rgba(255,255,255,0.06)",
+      background: expanded ? `${vm.color}04` : "rgba(10,18,24,0.5)",
+      overflow: "hidden",
+      transition: "all 0.2s",
+    }}>
+      {/* Clickable header row */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          width: "100%", padding: "14px 18px",
+          display: "flex", alignItems: "center", gap: 12,
+          cursor: "pointer",
+          background: "transparent", border: "none", textAlign: "left",
+        }}
+      >
+        {/* Rank */}
+        <span style={{
+          fontFamily: MONO, fontSize: 11, fontWeight: 700, color: "#3A5A6A",
+          width: 22, textAlign: "center", flexShrink: 0,
+        }}>
+          {rank}
+        </span>
 
-      {health.issues.length > 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {health.issues.map((issue, i) => (
-            <div key={i} style={{
-              padding: "9px 12px", borderRadius: 6,
-              border: `1px solid ${meta.color}20`,
-              background: `${meta.color}06`,
-              fontFamily: MONO, fontSize: 11, color: "#8AB4C8",
+        {/* Verdict dot */}
+        <span style={{
+          width: 8, height: 8, borderRadius: "50%",
+          background: vm.color, boxShadow: `0 0 6px ${vm.color}`,
+          flexShrink: 0,
+        }} />
+
+        {/* Info */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontFamily: SANS, fontSize: 14, fontWeight: 600, color: "#E0F0FF" }}>
+              {target.name}
+            </span>
+            {target.category && <CategoryBadge category={target.category} />}
+            {target.reasoning && target.reasoning.intentMatch > 0 && (
+              <span style={{
+                fontFamily: MONO, fontSize: 9, color: "#A78BFA",
+                padding: "1px 5px", borderRadius: 2,
+                background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.15)",
+              }}>
+                intent {target.reasoning.intentMatch}
+              </span>
+            )}
+          </div>
+          {target.description && (
+            <div style={{
+              fontFamily: MONO, fontSize: 10, color: "#5A7A8A",
+              marginTop: 3, lineHeight: 1.4,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
-              <AlertCircle style={{ width: 12, height: 12, color: meta.color, marginRight: 6, verticalAlign: -1 }} />
-              {issue}
+              {target.description}
             </div>
-          ))}
+          )}
         </div>
-      ) : voteNoProposals ? (
-        <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
-          L1 is healthy, but there are <strong style={{ color: "#E0F0FF" }}>no active governance proposals</strong> to vote on right now. Check back when a proposal enters voting period.
-        </div>
-      ) : (
-        <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", lineHeight: 1.6 }}>
-          Initia L1 is producing blocks, the validator set is healthy, and no risks apply to <strong style={{ color: "#E0F0FF" }}>{action}</strong> right now.
+
+        {/* Score */}
+        <span style={{
+          fontFamily: MONO, fontSize: 10, fontWeight: 700, color: target.color,
+          padding: "3px 8px", borderRadius: 3,
+          background: `${target.color}12`, border: `1px solid ${target.color}25`,
+          flexShrink: 0,
+        }}>
+          {target.score}
+        </span>
+
+        {/* Quick CTA */}
+        {externalHref ? (
+          <a
+            href={externalHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            style={{
+              fontFamily: MONO, fontSize: 10, fontWeight: 700, color: "#00FF88",
+              padding: "5px 10px", borderRadius: 4,
+              background: "rgba(0,255,136,0.06)", border: "1px solid rgba(0,255,136,0.2)",
+              textDecoration: "none",
+              display: "flex", alignItems: "center", gap: 4,
+              flexShrink: 0,
+            }}
+          >
+            Open <ExternalLink style={{ width: 10, height: 10 }} />
+          </a>
+        ) : (
+          <Link
+            href={askHref}
+            onClick={e => e.stopPropagation()}
+            style={{
+              fontFamily: MONO, fontSize: 10, color: "#8AB4C8",
+              padding: "5px 10px", borderRadius: 4,
+              background: "rgba(0,212,255,0.04)", border: "1px solid rgba(0,212,255,0.12)",
+              textDecoration: "none",
+              display: "flex", alignItems: "center", gap: 4,
+              flexShrink: 0,
+            }}
+          >
+            <Sparkles style={{ width: 10, height: 10 }} /> Ask
+          </Link>
+        )}
+      </button>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div style={{
+          padding: "0 18px 16px", paddingLeft: 60,
+          borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: 12,
+        }}>
+          {/* Reasoning badges */}
+          {target.reasoning && target.reasoning.facts.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: 10 }}>
+              {target.reasoning.facts
+                .filter(f => f.kind !== "info")
+                .slice(0, 6)
+                .map((f, i) => (
+                <span key={i} style={{
+                  fontFamily: MONO, fontSize: 9,
+                  color: f.kind === "pass" ? "#00FF88" : "#FF3366",
+                  padding: "2px 6px", borderRadius: 2,
+                  background: f.kind === "pass" ? "rgba(0,255,136,0.06)" : "rgba(255,51,102,0.06)",
+                  border: `1px solid ${f.kind === "pass" ? "rgba(0,255,136,0.18)" : "rgba(255,51,102,0.18)"}`,
+                }}>
+                  {f.kind === "pass" ? "✓" : "✗"} {f.label}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Risks */}
+          {risks.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+              {risks.map(r => <RiskRow key={r.id} risk={r} />)}
+            </div>
+          )}
+
+          {/* Full CTAs */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {externalHref && (
+              <a href={externalHref} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                <div style={{
+                  padding: "8px 14px", borderRadius: 6,
+                  border: "1px solid rgba(0,255,136,0.3)", background: "rgba(0,255,136,0.06)",
+                  display: "flex", alignItems: "center", gap: 6,
+                  fontFamily: MONO, fontSize: 11, fontWeight: 700, color: "#00FF88",
+                }}>
+                  Open {target.name} <ExternalLink style={{ width: 11, height: 11 }} />
+                </div>
+              </a>
+            )}
+            <Link href={askHref} style={{ textDecoration: "none" }}>
+              <div style={{
+                padding: "8px 14px", borderRadius: 6,
+                border: "1px solid rgba(0,212,255,0.15)", background: "rgba(0,212,255,0.04)",
+                display: "flex", alignItems: "center", gap: 6,
+                fontFamily: MONO, fontSize: 11, color: "#8AB4C8",
+              }}>
+                <Sparkles style={{ width: 11, height: 11 }} /> Ask Pulse
+              </div>
+            </Link>
+          </div>
         </div>
       )}
-    </VerdictShell>
+    </div>
   );
+}
+
+// ─── Shared helpers ─────────────────────────────────────────────────────────
+
+const VERDICT_META = {
+  allow: { color: "#00FF88", Icon: CheckCircle2, label: "ROUTE CLEAR" },
+  warn:  { color: "#FFB800", Icon: ShieldAlert,  label: "CAUTION" },
+  block: { color: "#FF3366", Icon: AlertTriangle, label: "BLOCKED" },
+} as const;
+
+function computeVerdict(target: Target, risks: Risk[]): "allow" | "warn" | "block" {
+  if (target.kind === "l1") {
+    return target.health.score < 25 ? "block" : target.health.score < 50 ? "warn" : "allow";
+  }
+  const critical = risks.filter(r => r.severity === "critical");
+  const elevated = risks.filter(r => r.severity === "elevated");
+  return critical.length > 0 ? "block" : elevated.length > 0 ? "warn" : "allow";
+}
+
+function buildAskHref(target: Target, action: Action, verdict: "allow" | "warn" | "block"): string {
+  const prompt = target.kind === "rollup"
+    ? buildAskPromptRollup(action, target.minitia, verdict)
+    : buildAskPromptL1(action, target.chainId, verdict);
+  return `/ask?prompt=${encodeURIComponent(prompt)}`;
 }
 
 function L1Metric({ label, value, color }: { label: string; value: string; color: string }) {
@@ -810,145 +908,13 @@ function L1Metric({ label, value, color }: { label: string; value: string; color
   );
 }
 
-function VerdictShell({
-  color, Icon, label, headline, subline, onReset,
-  askHref, blocked, askHeadline, askSub,
-  externalHref, externalHeadline, externalSub,
-  children,
-}: {
-  color: string;
-  Icon: typeof CheckCircle2;
-  label: string;
-  headline: string;
-  subline: string;
-  onReset: () => void;
-  askHref: string;
-  blocked: boolean;
-  askHeadline: string;
-  askSub: string;
-  externalHref?: string;
-  externalHeadline?: string;
-  externalSub?: string;
-  children: React.ReactNode;
-}) {
-  const hasExternal = !!externalHref && !blocked;
-  return (
-    <section style={{ marginBottom: 24 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <StepDot n={3} active />
-        <span style={{ fontFamily: SANS, fontSize: 15, fontWeight: 700, color: "#E0F0FF" }}>
-          Pulse verdict for this route
-        </span>
-        <button
-          onClick={onReset}
-          style={{
-            marginLeft: "auto", fontFamily: MONO, fontSize: 11, color: "#5A7A8A",
-            background: "none", border: "none", cursor: "pointer",
-          }}
-        >
-          ← start over
-        </button>
-      </div>
-
-      <div style={{
-        padding: 24, borderRadius: 10,
-        border: `1px solid ${color}40`,
-        background: `linear-gradient(135deg, ${color}10, rgba(4,10,15,0.6))`,
-        marginBottom: 14,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 16 }}>
-          <Icon style={{ width: 40, height: 40, color }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: SANS, fontSize: 26, fontWeight: 800, color, lineHeight: 1.1 }}>
-              {headline}
-            </div>
-            <div style={{ fontFamily: MONO, fontSize: 12, color: "#8AB4C8", marginTop: 5 }}>
-              {subline}
-            </div>
-          </div>
-          <span style={{
-            fontFamily: MONO, fontSize: 11, fontWeight: 700, color,
-            padding: "5px 12px", borderRadius: 4,
-            background: `${color}15`, border: `1px solid ${color}30`,
-            letterSpacing: "0.1em",
-          }}>
-            {label}
-          </span>
-        </div>
-        {children}
-      </div>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {hasExternal && (
-          <a
-            href={externalHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ flex: "1 1 260px", textDecoration: "none" }}
-          >
-            <div style={{
-              padding: "14px 18px", borderRadius: 8,
-              border: `1px solid ${color}55`,
-              background: `linear-gradient(135deg, ${color}18, ${color}06)`,
-              display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-              boxShadow: `0 0 24px ${color}15`,
-            }}>
-              <ExternalLink style={{ width: 16, height: 16, color }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
-                  {externalHeadline}
-                </div>
-                <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", marginTop: 2 }}>
-                  {externalSub}
-                </div>
-              </div>
-              <ArrowRight style={{ width: 14, height: 14, color }} />
-            </div>
-          </a>
-        )}
-        <Link href={askHref} style={{ flex: "1 1 260px", textDecoration: "none" }}>
-          <div style={{
-            padding: "14px 18px", borderRadius: 8,
-            border: blocked
-              ? "1px solid rgba(255,51,102,0.25)"
-              : hasExternal
-              ? "1px solid rgba(255,255,255,0.08)"
-              : "1px solid rgba(0,255,136,0.25)",
-            background: blocked
-              ? "rgba(255,51,102,0.05)"
-              : hasExternal
-              ? "rgba(10,18,24,0.6)"
-              : "rgba(0,255,136,0.05)",
-            display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-            opacity: blocked ? 0.5 : 1,
-          }}>
-            <Sparkles style={{
-              width: 16, height: 16,
-              color: blocked ? "#FF3366" : hasExternal ? "#8AB4C8" : "#00FF88",
-            }} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: SANS, fontSize: 13, fontWeight: 700, color: "#E0F0FF" }}>
-                {askHeadline}
-              </div>
-              <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", marginTop: 2 }}>
-                {askSub}
-              </div>
-            </div>
-            <ArrowRight style={{ width: 14, height: 14, color: "#8AB4C8" }} />
-          </div>
-        </Link>
-      </div>
-    </section>
-  );
-}
-
 function RiskRow({ risk }: { risk: Risk }) {
   const color = risk.severity === "critical" ? "#FF3366"
               : risk.severity === "elevated" ? "#FFB800"
               : "#00D4FF";
   const Icon = risk.severity === "critical" ? AlertTriangle
              : risk.severity === "elevated" ? ShieldAlert
-             : AlertCircle;
+             : CheckCircle2;
   return (
     <div style={{
       padding: "10px 12px", borderRadius: 6,
