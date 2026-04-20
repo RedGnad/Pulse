@@ -1,8 +1,8 @@
 import ActPage from "./act/page";
 
-// Pulse's landing is the action router. The old network-wide dashboard
-// ("Signal") is archived in src/components/dashboard/dashboard-content.tsx
-// and will be folded into /proof as a topology tab in a follow-up.
+// Pulse's landing is the action router. /proof mounts the oracle, gate,
+// and live IBC topology tabs as the verification layer for the routing
+// decisions made here.
 export default function Home() {
   return (
     <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh" }}>

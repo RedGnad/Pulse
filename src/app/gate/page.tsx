@@ -121,7 +121,7 @@ export default function GatePage() {
               <span style={{ fontFamily: MONO, fontSize: 10, color: "#3A5A6A" }}>
                 {status.source === "contract"
                   ? `↳ on-chain read · ${status.contractAddress?.slice(0, 8)}…${status.contractAddress?.slice(-6)}`
-                  : "↳ derived from oracle cache (PulseGate not yet deployed)"}
+                  : "↳ server-side mirror of contracts/PulseGate.sol against the live Oracle"}
               </span>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
@@ -183,8 +183,8 @@ contract PulseGate {
             </pre>
           </section>
 
-          {/* Cross-link to /act */}
-          <Link href="/act" style={{ textDecoration: "none" }}>
+          {/* Cross-link to Ask Pulse */}
+          <Link href="/" style={{ textDecoration: "none" }}>
             <section style={{
               padding: "18px 22px", borderRadius: 10,
               border: "1px solid rgba(0,255,136,0.15)",
@@ -194,10 +194,10 @@ contract PulseGate {
               <ShieldAlert style={{ width: 20, height: 20, color: "#00FF88", flexShrink: 0 }} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: SANS, fontSize: 14, fontWeight: 700, color: "#E0F0FF" }}>
-                  The same signal guards Act → Execute flows
+                  The same signal guards every route
                 </div>
                 <div style={{ fontFamily: MONO, fontSize: 11, color: "#8AB4C8", marginTop: 3 }}>
-                  On /act, users pick a route and Pulse checks per-rollup risks before letting the tx proceed.
+                  Describe what you want to do and Pulse checks per-rollup risks before letting the tx proceed.
                 </div>
               </div>
               <ArrowRight style={{ width: 14, height: 14, color: "#00FF88", opacity: 0.6 }} />

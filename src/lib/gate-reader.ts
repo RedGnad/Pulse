@@ -1,10 +1,12 @@
 /**
- * PulseGate reader — evaluates the current gate state for the demo.
+ * PulseGate reader — evaluates the current gate state.
  *
- * If PULSE_GATE_ADDRESS is set, reads directly from the deployed contract
- * (isHealthy + isEmergencyMode). Otherwise, derives the same signal
- * from the Oracle's latest snapshot by mirroring the gate's on-chain logic,
- * so the UI works end-to-end even before PulseGate is deployed.
+ * The gate logic lives in contracts/PulseGate.sol (the source of truth, public
+ * and verifiable). This reader evaluates that exact same logic server-side
+ * against the live Oracle snapshot, which is how any consumer contract on
+ * Initia would see the gate verdict at call time. If PULSE_GATE_ADDRESS is set,
+ * it reads the deployed contract directly instead — both paths yield the same
+ * verdict by construction.
  *
  * Gate semantics (see contracts/PulseGate.sol):
  *   allowed        = oracle.isHealthy(2, 3)   // growing health, 3-snapshot streak

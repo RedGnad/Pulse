@@ -51,7 +51,7 @@ export default function NotFound() {
             Proof
           </div>
         </Link>
-        <Link href="/ask" style={{ textDecoration: "none" }}>
+        <Link href="/" style={{ textDecoration: "none" }}>
           <div style={{
             padding: "11px 18px", borderRadius: 7,
             border: "1px solid rgba(255,255,255,0.08)",

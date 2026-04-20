@@ -3,8 +3,7 @@
 // /proof — the single place to verify that the Pulse signal is real.
 //
 // The router on / makes a decision. /proof is where you confirm that
-// decision is backed by on-chain data, a gate contract anyone can read,
-// and the live IBC topology the router uses to reason about routes.
+// decision is backed by on-chain data and a gate contract anyone can read.
 //
 // This page deliberately does NOT duplicate the logic in /oracle or /gate;
 // it just mounts the existing components inside a tab shell. Both routes
@@ -13,21 +12,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Database, ShieldCheck, Globe, ExternalLink } from "lucide-react";
+import { Database, ShieldCheck, ExternalLink } from "lucide-react";
 import OraclePage from "../oracle/page";
 import GatePage from "../gate/page";
-import { IbcFlowMap } from "@/components/dashboard/ibc-flow-map";
-import { useEcosystem } from "@/hooks/use-ecosystem";
 
 const MONO = "var(--font-jetbrains), monospace";
 const SANS = "var(--font-chakra), sans-serif";
 
-type Tab = "oracle" | "gate" | "topology";
+type Tab = "oracle" | "gate";
 
 const TABS: { id: Tab; label: string; sub: string; Icon: typeof Database; deepLink: string }[] = [
-  { id: "oracle",   label: "On-chain signal",    sub: "Pulse Oracle snapshots — the number contracts read.",   Icon: Database,    deepLink: "/oracle" },
-  { id: "gate",     label: "30 lines of Solidity", sub: "The reference gate contract any rollup can deploy.", Icon: ShieldCheck, deepLink: "/gate" },
-  { id: "topology", label: "IBC topology",       sub: "The live channel graph the router reasons over.",      Icon: Globe,       deepLink: "/" },
+  { id: "oracle", label: "On-chain signal",       sub: "Pulse Oracle snapshots — the number contracts read.",   Icon: Database,    deepLink: "/oracle" },
+  { id: "gate",   label: "30 lines of Solidity",  sub: "The reference gate contract any rollup can deploy.",    Icon: ShieldCheck, deepLink: "/gate"   },
 ];
 
 export default function ProofPage() {
@@ -107,25 +103,22 @@ export default function ProofPage() {
         })}
       </div>
 
-      {/* Deep-link hint for the active tab (only for oracle + gate which
-          have standalone routes with extra controls). */}
-      {(tab === "oracle" || tab === "gate") && (
-        <div style={{
-          marginBottom: 12,
-          fontFamily: MONO, fontSize: 10,
-          color: "#5A7A8A",
-          display: "flex", alignItems: "center", gap: 6,
+      {/* Deep-link hint — each tab has a standalone route with extra controls. */}
+      <div style={{
+        marginBottom: 12,
+        fontFamily: MONO, fontSize: 10,
+        color: "#5A7A8A",
+        display: "flex", alignItems: "center", gap: 6,
+      }}>
+        <span>deep-link:</span>
+        <Link href={TABS.find(t => t.id === tab)!.deepLink} style={{
+          color: "#A78BFA", textDecoration: "none",
+          display: "inline-flex", alignItems: "center", gap: 4,
         }}>
-          <span>deep-link:</span>
-          <Link href={TABS.find(t => t.id === tab)!.deepLink} style={{
-            color: "#A78BFA", textDecoration: "none",
-            display: "inline-flex", alignItems: "center", gap: 4,
-          }}>
-            {TABS.find(t => t.id === tab)!.deepLink}
-            <ExternalLink style={{ width: 10, height: 10 }} />
-          </Link>
-        </div>
-      )}
+          {TABS.find(t => t.id === tab)!.deepLink}
+          <ExternalLink style={{ width: 10, height: 10 }} />
+        </Link>
+      </div>
 
       {/* Active tab content. Only one mounts at a time — /oracle and /gate
           are heavy client components with their own polling intervals, so
@@ -133,45 +126,6 @@ export default function ProofPage() {
       <div>
         {tab === "oracle" && <OraclePage />}
         {tab === "gate" && <GatePage />}
-        {tab === "topology" && <TopologyPanel />}
-      </div>
-    </div>
-  );
-}
-
-function TopologyPanel() {
-  const { data } = useEcosystem();
-  if (!data) {
-    return (
-      <div style={{
-        padding: 40, textAlign: "center",
-        fontFamily: MONO, fontSize: 12, color: "#5A7A8A",
-      }}>
-        Loading ecosystem…
-      </div>
-    );
-  }
-  return (
-    <div style={{
-      borderRadius: 8,
-      overflow: "hidden",
-      border: "1px solid rgba(167,139,250,0.12)",
-    }}>
-      <IbcFlowMap
-        ibcChannels={data.ibcChannels}
-        minitias={data.minitias}
-        selectedChain={null}
-        height={520}
-      />
-      <div style={{
-        padding: "14px 18px",
-        background: "rgba(10,18,24,0.8)",
-        borderTop: "1px solid rgba(167,139,250,0.08)",
-        fontFamily: MONO, fontSize: 11, color: "#8AB4C8", lineHeight: 1.6,
-      }}>
-        Every node is a chain in the initia-registry. Edges are live IBC
-        channels. The router inspects this graph at request time to
-        compute bridge and settlement scores for each candidate rollup.
       </div>
     </div>
   );

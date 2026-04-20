@@ -27,7 +27,7 @@ export interface Risk {
   kind: RiskKind;
   severity: RiskSeverity;
   target: string;         // human-readable target ("Minimove", "channel-42", etc.)
-  targetChainId?: string; // for linking into /act
+  targetChainId?: string; // for linking into intent router
   headline: string;       // one-line summary, < 80 chars
   detail: string;         // 1-2 sentence explanation
   score?: number;         // 0-100, if a pulse score is attached

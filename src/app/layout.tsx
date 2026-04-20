@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import { Header } from "@/components/header";
-import { FloatingChat } from "@/components/floating-chat";
+
 import "./globals.css";
 
 const syne = localFont({
@@ -21,9 +21,9 @@ const dmMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Initia Pulse — On-Chain Intelligence",
+  title: "Pulse — Initia Action Router",
   description:
-    "An AI that watches the entire Initia ecosystem and writes its analysis immutably on-chain. On-chain intelligence oracle + AI advisor for the Interwoven Network.",
+    "Describe what you want to do on Initia and get routed to the right minitia instantly. Deterministic intent router + live health oracle for the Interwoven Network.",
 };
 
 export default function RootLayout({
@@ -40,7 +40,6 @@ export default function RootLayout({
         <Providers>
           <Header />
           {children}
-          <FloatingChat />
         </Providers>
       </body>
     </html>
