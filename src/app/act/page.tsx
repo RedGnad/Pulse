@@ -429,33 +429,6 @@ function AskPulsePageInner() {
                   </span>
                 </div>
 
-                {/* Live Pulse Scores */}
-                {ecosystem?.minitias && (() => {
-                  const scored = ecosystem.minitias
-                    .filter(m => m.pulseScore && (m.metrics?.blockHeight ?? 0) > 0)
-                    .sort((a, b) => (b.pulseScore?.total ?? 0) - (a.pulseScore?.total ?? 0))
-                    .slice(0, 5);
-                  if (!scored.length) return null;
-                  return (
-                    <div style={{
-                      display: "flex", alignItems: "center", gap: 16,
-                      padding: "8px 16px", border: "1px solid rgba(255,255,255,0.04)",
-                      borderRadius: 8, background: "rgba(255,255,255,0.01)", marginTop: 4,
-                    }}>
-                      <span style={{ fontFamily: MONO, fontSize: 11, color: "#3A5A6A", letterSpacing: "0.1em" }}>
-                        PULSE SCORES
-                      </span>
-                      {scored.map(m => (
-                        <div key={m.chainId} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <span style={{ fontFamily: MONO, fontSize: 12, color: "#5A7A8A" }}>{m.prettyName}</span>
-                          <span style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: scoreColor(m.pulseScore?.total ?? 0) }}>
-                            {m.pulseScore?.total}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
               </div>
 
               {/* Category grid */}
@@ -686,8 +659,8 @@ function CategoryCard({ icon: Icon, label, questions, onSelect }: {
       onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(0,255,136,0.08)"; e.currentTarget.style.background = "rgba(10,18,24,0.6)"; }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-        <Icon style={{ width: 14, height: 14, color: "#5A7A8A" }} />
-        <span style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: "#8AB4C8" }}>{label}</span>
+        <Icon style={{ width: 14, height: 14, color: "#00FF88", opacity: 0.8 }} />
+        <span style={{ fontFamily: SANS, fontSize: 12, fontWeight: 600, color: "#E0F0FF" }}>{label}</span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {questions.map(q => {
@@ -698,11 +671,11 @@ function CategoryCard({ icon: Icon, label, questions, onSelect }: {
               style={{
                 textAlign: "left", padding: "6px 8px", borderRadius: 4,
                 border: "none", background: "transparent", cursor: "pointer",
-                fontFamily: MONO, fontSize: 12, color: "#5A7A8A", lineHeight: 1.4,
+                fontFamily: MONO, fontSize: 12, color: "#A8C8D8", lineHeight: 1.4,
                 transition: "all 0.1s",
               }}
               onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,255,136,0.06)"; e.currentTarget.style.color = "#00FF88"; }}
-              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#5A7A8A"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#A8C8D8"; }}
             >
               {display}
             </button>

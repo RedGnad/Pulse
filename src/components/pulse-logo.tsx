@@ -28,8 +28,6 @@ export function PulseLogo({ size = 24, color = "#00FF88", animated = false, styl
           </feMerge>
         </filter>
       </defs>
-      <circle cx="16" cy="16" r="14" stroke={color} strokeOpacity="0.18" strokeWidth="1" />
-      <circle cx="16" cy="16" r="9" stroke={color} strokeOpacity="0.28" strokeWidth="1" />
       <path
         d="M3 16 H10 L12.5 10 L16 22 L19.5 13 L22 16 H29"
         stroke={color}

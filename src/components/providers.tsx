@@ -44,7 +44,7 @@ const pulseChain = {
   },
   staking: { staking_tokens: [{ denom: PULSE_DENOM }] },
   native_assets: [{ denom: PULSE_DENOM, name: "Pulse", symbol: "PULSE", decimals: 18 }],
-  metadata: { is_l1: false },
+  metadata: { is_l1: false, minitia: { type: "minievm" } },
 };
 
 export function Providers({ children }: { children: React.ReactNode }) {
