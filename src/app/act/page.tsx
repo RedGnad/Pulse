@@ -23,6 +23,7 @@ import {
   Action, Target, L1_ONLY_ACTIONS, buildTargets, parseIntent, inferAction,
 } from "@/lib/action-routing";
 import { GateBadge } from "@/components/gate-badge";
+import { PulseLogo } from "@/components/pulse-logo";
 import type { ActionIntent } from "@/lib/action-parser";
 import type { MinitiaWithMetrics } from "@/lib/types";
 
@@ -375,28 +376,36 @@ function AskPulsePageInner() {
               animation: "fade-in 0.6s ease-out",
             }}>
               {/* Hero */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, marginBottom: 48 }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18, marginBottom: 48 }}>
                 <div style={{
-                  width: 64, height: 64, borderRadius: 16,
-                  background: "rgba(0,255,136,0.06)", border: "1px solid rgba(0,255,136,0.15)",
+                  position: "relative",
+                  width: 84, height: 84, borderRadius: 20,
+                  background: "rgba(0,255,136,0.05)", border: "1px solid rgba(0,255,136,0.18)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  boxShadow: "0 0 40px rgba(0,255,136,0.08)",
+                  boxShadow: "0 0 60px rgba(0,255,136,0.12), inset 0 0 40px rgba(0,255,136,0.04)",
                 }}>
-                  <Sparkles style={{ width: 28, height: 28, color: "#00FF88" }} />
+                  <PulseLogo size={44} color="#00FF88" animated />
+                  <span style={{
+                    position: "absolute", inset: -1, borderRadius: 20,
+                    border: "1px solid rgba(0,255,136,0.5)",
+                    animation: "header-ping 3s cubic-bezier(0, 0, 0.2, 1) infinite",
+                    pointerEvents: "none",
+                  }} />
                 </div>
                 <h1 style={{
-                  fontFamily: SANS, fontSize: 36, fontWeight: 700,
-                  color: "#E0F0FF", margin: 0, letterSpacing: "-0.02em",
+                  fontFamily: SANS, fontSize: 44, fontWeight: 800,
+                  color: "#E0F0FF", margin: 0, letterSpacing: "-0.025em", lineHeight: 1.05,
+                  textAlign: "center",
                 }}>
-                  Ask Pulse
+                  Route any intent on Initia.
                 </h1>
                 <p style={{
                   fontFamily: MONO, fontSize: 13, color: "#8AB4C8",
-                  margin: 0, textAlign: "center", lineHeight: 1.6, maxWidth: 440,
+                  margin: 0, textAlign: "center", lineHeight: 1.6, maxWidth: 520,
                 }}>
-                  AI-powered intelligence with live ecosystem data.
+                  Describe what you want to do — stake, bridge, send, vote, deploy —
                   <br />
-                  Ask anything about Initia — execute staking, bridging, governance, or monitoring.
+                  and Pulse routes you to the right minitia with a live health check.
                 </p>
 
                 {isConnected && initiaAddress && (

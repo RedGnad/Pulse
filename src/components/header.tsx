@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
-import { Sparkles } from "lucide-react";
 import { useInterwovenKit } from "@initia/interwovenkit-react";
 import { useNetwork } from "@/contexts/network-context";
+import { PulseLogo } from "@/components/pulse-logo";
 
 const NAV_LINKS: { href: string; label: string }[] = [
   { href: "/",      label: "Act"   },
@@ -144,7 +144,7 @@ export function Header() {
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0,
           }}>
-            <Sparkles style={{ width: 18, height: 18, color: "#00FF88", opacity: 0.8 }} />
+            <PulseLogo size={22} color="#00FF88" animated />
             <span style={{
               position: "absolute", inset: 0, borderRadius: 7,
               border: "1px solid #00FF88",
