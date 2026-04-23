@@ -1,0 +1,13 @@
+diff --git a/node_modules/@initia/interwovenkit-react/dist/index.js b/node_modules/@initia/interwovenkit-react/dist/index.js
+index dc5287a..4564f82 100644
+--- a/node_modules/@initia/interwovenkit-react/dist/index.js
++++ b/node_modules/@initia/interwovenkit-react/dist/index.js
+@@ -1927,7 +1927,7 @@ function $l() {
+     const { chainId: a, grantee: r } = s;
+     if (!e)
+       throw new Error("Granter wallet not initialized");
+-    const i = await t(a, r), c = await n(a, r), l = i ? [
++    const i = await t(a, r), c = await n(a, r), l = (i && i.granter === e && i.grantee === r) ? [
+       {
+         typeUrl: "/cosmos.feegrant.v1beta1.MsgRevokeAllowance",
+         value: lm.fromPartial({ granter: e, grantee: r })

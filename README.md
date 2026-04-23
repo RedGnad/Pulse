@@ -16,9 +16,9 @@ Pulse reads the authoritative `initia-registry` profiles (category, description,
 
 The app is organized around the flow **intent → decision → proof → execution**:
 
-- **`/` — Act (the router)**. Intent-first landing. Type a query, see the winning minitia with pass/fail reasoning facts (`profile action: borrow`, `supports USDC`, `supports leverage`), the Pulse Score axes, and a deep-link into the execution layer. Six canonical demo queries are one click away.
+- **`/` — Act (the router)**. Intent-first landing. Type a query, see the winning minitia with pass/fail reasoning facts (`profile action: borrow`, `supports USDC`, `supports leverage`), the Pulse Score axes, and a deep-link into the execution layer. Six categorized suggestion blocks (Ecosystem, Staking, Bridge, Security, Deploy, Data) are one click away.
 - **`/proof` — Proof layer**. Supporting evidence for the decision the router just made, as two tabs: the `PulseOracle` on-chain snapshot and the `PulseGate` reference contract.
-- **Execution (auto-sign)**. Verdict cards deep-link into InterwovenKit's auto-signing flow on L1 (`initiation-2`) for `bridge`, `send`, `stake`, and `vote`. The natural-language action layer lives inline on `/` (the `/ask` route redirects back to it).
+- **Execution**. Verdict cards deep-link into InterwovenKit's transaction flow on L1 (`initiation-2`) for `bridge`, `send`, `stake`, and `vote`. When the auto-sign session is authorized, actions execute headlessly via `submitTxBlock`; otherwise each action opens one signature popup via `requestTxSync`.
 - **Deep-links**: `/oracle` and `/gate` mirror the tabs in `/proof` as standalone pages for bookmarking.
 
 ### Implementation Detail
@@ -29,9 +29,9 @@ The app is organized around the flow **intent → decision → proof → executi
 
 - **Supporting contracts** (all viewable from `/proof`). `PulseOracle.sol` is a composable Solidity contract on a MiniEVM rollup (`initia-pulse-1`) that publishes a circular history of ecosystem snapshots and exposes `latest()`, `healthStreak()`, and `isHealthy(minHealth, minStreak)` — free-to-read for any contract. `PulseGate.sol` is a 30-line reference consumer showing how a DeFi protocol can gate its own operations on the same signal (`require(oracle.isHealthy(2, 3), ...)`). `PulseGov.sol` uses the `ICosmos` precompile to let an EVM wallet on the Pulse rollup cast Initia L1 governance votes via `execute_cosmos(MsgVote)` — demonstrating the Interwoven architecture end-to-end. Full source in `contracts/`.
 
-- **Initia-native integrations** (all exposed via the `/ask` execution layer):
-  - **Interwoven Bridge** via InterwovenKit's `openBridge` hook, reachable from five entry points across the app.
-  - **Auto-signing transactions** — natural-language *"send 10 INIT to @alice"*, *"stake 50 INIT on [validator]"*, *"bridge 5 INIT"* — parsed, confirmed, executed via `submitTxBlock` with gas estimated via `estimateGas` + `calculateFee`.
+- **Initia-native integrations** (all exposed from `/` via the router verdict cards):
+  - **Interwoven Bridge** via InterwovenKit's `openBridge` hook, triggered directly from the router when the intent verb is *bridge*.
+  - **Natural-language transaction execution** — *"send 10 INIT to @alice"*, *"stake 50 INIT on Chorus One"*, *"vote yes on proposal #42"* — parsed, confirmed, executed via `requestTxSync` (per-tx signing) or `submitTxBlock` when an auto-sign session is authorized on `initiation-2` (whitelisting `MsgSend`, `MsgDelegate`, `MsgUndelegate`).
   - **`.init` usernames** resolved via `useUsernameQuery` before tx execution.
   - **L1 governance from an EVM rollup** via `PulseGov.sol` + the `ICosmos` precompile — the Cosmos-native `MsgVote` is triggered from the EVM execution environment.
 
@@ -66,7 +66,7 @@ The app is organized around the flow **intent → decision → proof → executi
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  Next.js Frontend (InterwovenKit + wagmi)                │
-│  /  (Act — router)  ·  /proof  ·  /ask                   │
+│  /  (Act — router)  ·  /proof  ·  /oracle  ·  /gate      │
 └────────────────┬─────────────────────────────────────────┘
                  │
 ┌────────────────▼─────────────────────────────────────────┐
@@ -78,7 +78,7 @@ The app is organized around the flow **intent → decision → proof → executi
                  │
 ┌────────────────▼─────────────────────────────────────────┐
 │  AI Engine (Anthropic / OpenAI / any OpenAI-compat API)  │
-│  Ask Pulse · brief generation · action card parsing      │
+│  Verdict briefs · action card parsing · intent enrich    │
 └────────────────┬─────────────────────────────────────────┘
                  │ ethers.js
 ┌────────────────▼─────────────────────────────────────────┐
@@ -111,7 +111,7 @@ The rollup `initia-pulse-1` runs locally via Weave CLI (`http://127.0.0.1:8545`,
 
 ### What Pulse does not prove
 - **Data provenance**: `dataHash` proves data wasn't modified after commit, it does not cryptographically prove which source produced it. All sources are public Initia APIs, independently verifiable.
-- **AI brief correctness**: The brief generated in Ask Pulse is analysis, not financial advice. Always DYOR before acting on a recommendation.
+- **AI brief correctness**: The verdict briefs are AI analysis, not financial advice. Always DYOR before acting on a recommendation.
 
 ### Current trust assumptions
 - Single backend signer writes snapshots (writer key).
@@ -181,7 +181,7 @@ AI_API_KEY=lm-studio
 - **Contracts**: Solidity ^0.8.24, deployed with Foundry. `PulseOracle`, `PulseGate`, `PulseGov`.
 - **Frontend**: Next.js 16, TypeScript, InterwovenKit v2, wagmi, TanStack Query.
 - **Routing engine**: deterministic intent parser + composite scoring, zero external ML dependency on the routing path. Covered by a vitest suite and a sanity script against live registry profiles.
-- **AI (Ask Pulse only)**: Multi-provider (Anthropic, OpenAI, Ollama, LM Studio, Groq, or any OpenAI-compatible API), used for brief generation and action-card parsing — never on the routing decision itself.
+- **AI (verdict briefs only)**: Multi-provider (Anthropic, OpenAI, Ollama, LM Studio, Groq, or any OpenAI-compatible API), used for brief generation and action-card parsing — never on the routing decision itself.
 
 ---
 
@@ -191,12 +191,12 @@ The rollup (`initia-pulse-1`) runs locally via the Weave CLI and is **not regist
 
 **What this means in practice:**
 
-- The **Interwoven Bridge** is fully implemented in code via InterwovenKit's `openBridge()` hook (five integration points across the app), but the bridge modal won't list `initia-pulse-1` as a destination on the public bridge UI.
-- **This does not affect core functionality.** Pulse's value is read-only intelligence: the AI agent writes oracle snapshots using a backend signer key, and the router, `/proof`, and Ask Pulse all work independently of user-bridged assets.
-- **Auto-sign actions (send, stake, bridge, vote) execute on L1 testnet** (`initiation-2`) and work on the live site regardless of the local rollup limitation.
+- The **Interwoven Bridge** is fully implemented in code via InterwovenKit's `openBridge()` hook, but the bridge modal won't list `initia-pulse-1` as a destination on the public bridge UI.
+- **This does not affect core functionality.** Pulse's value is read-only intelligence plus a routing layer: the backend signer writes oracle snapshots, and the router, `/proof`, and verdict cards all work independently of user-bridged assets.
+- **Transaction actions (send, stake, bridge, vote) execute on L1 testnet** (`initiation-2`) and work on the live site regardless of the local rollup limitation. Each action triggers one InterwovenKit signature popup; auto-sign session handoff (`submitTxBlock`) takes over when enabled.
 - **Intended production flow:** In a registered-rollup scenario, users can move INIT between L1 and any rollup. `PulseOracle` data remains freely readable by any contract or frontend without bridging.
 
-**Live demo:** [initiapulse.vercel.app](https://initiapulse.vercel.app) — the full app runs with cached oracle data. The rollup + oracle write flow is demonstrated in the [demo video](https://youtu.be/r3Uz-rFKzm0).
+**Live demo:** [initiapulse.vercel.app](https://initiapulse.vercel.app) — the full app runs with cached oracle data. The rollup + oracle write flow is demonstrated in the [demo video](https://drive.google.com/file/d/1LhD_1tWPdtQ_gDvdm2jiHrvJcCxfbRUV/view?usp=sharing).
 
 ---
 
